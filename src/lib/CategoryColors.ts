@@ -17,13 +17,21 @@ export function getCategoryColor(category: string): CategoryStyle {
 /** Semantic colors for cross-feature relationship chrome. Keep these as utility
  * classes so entity identity stays consistent across the Gold page. */
 export const ENTITY_COLORS = {
+  phase: {
+    text: 'text-amber-300', border: 'border-amber-500/30', bg: 'bg-amber-500/10', bar: 'bg-amber-400',
+    light: { text: 'text-amber-700', border: 'border-amber-500/40', bg: 'bg-amber-50', bar: 'bg-amber-500' },
+  },
   goal: {
     text: 'text-amber-300', border: 'border-amber-500/30', bg: 'bg-amber-500/10', bar: 'bg-amber-400',
     light: { text: 'text-amber-700', border: 'border-amber-500/40', bg: 'bg-amber-50', bar: 'bg-amber-500' },
+    /* §9.1 — precomposed light: steps (literal strings, so the Tailwind scanner
+       sees them) let callers apply both themes in one class string. */
+    lightText: 'text-amber-700', lightBorder: 'border-amber-500/40', lightBg: 'bg-amber-50',
   },
   ltg: {
     text: 'text-yellow-300', border: 'border-yellow-500/30', bg: 'bg-yellow-500/10', bar: 'bg-yellow-400',
     light: { text: 'text-yellow-700', border: 'border-yellow-500/40', bg: 'bg-yellow-50', bar: 'bg-yellow-500' },
+    lightText: 'text-yellow-700', lightBorder: 'border-yellow-500/40', lightBg: 'bg-yellow-50',
   },
   habit: {
     text: 'text-emerald-300', border: 'border-emerald-500/30', bg: 'bg-emerald-500/10', bar: 'bg-emerald-400',

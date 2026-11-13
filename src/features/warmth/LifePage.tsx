@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
-import { Images, Layers, Map, BookOpen, Plus, FileClock, Pencil, Target, Sparkles, User, Calendar, Activity} from 'lucide-react'
+import { Images, Layers, Map, BookOpen, Plus, X, ChevronDown, Target, Sparkles, User, Calendar, Activity} from 'lucide-react'
 
 
 import { cn } from '@/lib/utils'
@@ -19,7 +19,10 @@ import { NotesTab } from '@/components/life-river/NotesTab'
 import { LivingSubstrate } from '@/components/life-river/LivingSubstrate'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import type { LensId } from '@/components/life-river/RingCanvas'
-import type { LifePhase } from '@/lib/riverMath'
+import { categoryOf, phaseSpanLabel, type LifePhase } from '@/lib/riverMath'
+import { ENTITY_COLORS } from '@/lib/CategoryColors'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
+import { DraftCard } from '@/components/life-river/NotesTab'
 import lifePage from '@/pages/registry/pages/life'
 import { usePageSurface } from '@/pages/registry'
 import MemoriesPage from '../../features/memories/MemoriesPage'
@@ -43,7 +46,7 @@ import { renderNetwork } from '../../lib/renderers/network'
 import { startPhaseClock } from '../../lib/currentPhase'
 
 /* §7b version stamp — proves the bundle carrying the covenant→Labs move is live. */
-console.log('%c[LifePage] v2.1 loaded (covenant tab retired — feature parked at /labs)', 'color: #fbbf24; font-weight: bold')
+console.log('%c[LifePage] v2.2 loaded (river revamp: switcher + peek + drafts pocket)', 'color: #fbbf24; font-weight: bold')
 
 const toStr = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -101,7 +104,7 @@ export interface LifePageProps {
 export default function LifePage({ initialTab, deepLink, onDeepLinkConsumed }: LifePageProps = {}) {
   useEffect(() => { startPhaseClock(); }, [])
   const navigate = useNavigate()
-  const { phases, loading, error, savePhase, reflect } = useLifePhases()
+  const { phases, loading, error, savePhase, deletePhase, reflect } = useLifePhases()
   const covenant = useCovenant()
   const memories = useMemories()
 
@@ -193,24 +196,12 @@ export default function LifePage({ initialTab, deepLink, onDeepLinkConsumed }: L
   const [goals, setGoals] = useState<Goal[]>([])
   const [ltgs, setLtgs] = useState<LongTermGoal[]>([])
   const [viewing, setViewing] = useState<LoadedMemory | null>(null)
-  const [redirectMode, setRedirectMode] = useState<'instant' | 'confirm'>(() => {
-    try { return (localStorage.getItem('life-redirect-mode') as 'instant' | 'confirm') || 'instant' } catch { return 'instant' }
-  })
-  const [confirmRedirect, setConfirmRedirect] = useState<{ lens: LensId; label: string } | null>(null)
   const [expandedPhaseId, setExpandedPhaseId] = useState<string | null>(null)
   const [expandedMode, setExpandedMode] = useState<'system' | 'manual'>('system')
 
   const togglePhaseContext = useCallback((phaseId: string) => {
     setExpandedPhaseId(current => current === phaseId ? null : phaseId)
     setExpandedMode('system')
-  }, [])
-
-  const toggleRedirectMode = useCallback(() => {
-    setRedirectMode(prev => {
-      const next = prev === 'instant' ? 'confirm' : 'instant'
-      try { localStorage.setItem('life-redirect-mode', next) } catch { /* ignore */ }
-      return next
-    })
   }, [])
 
   const handleAttachMemory = useCallback(async (memoryIds: string[], phaseId: string) => {
@@ -326,22 +317,47 @@ export default function LifePage({ initialTab, deepLink, onDeepLinkConsumed }: L
   // autofocusing) its own add form. Navigation, not a second writer.
   const [pendingAdd, setPendingAdd] = useState<LensId | null>(null)
 
+  /* §4.2 — in-flow peek: LTG chips inspect without leaving the river. Same
+     grammar as NoteDetailView's chips: inspecting deliberately does not
+     navigate (leaving the river for a goal title is a bigger interruption
+     than the one asked for) — navigating is offered inside the peek. */
+  type PeekTarget = { phaseId: string; kind: 'ltg'; id: string; label: string }
+  const [peek, setPeek] = useState<PeekTarget | null>(null)
+  const handleInspect = useCallback((t: PeekTarget) => {
+    setPeek(prev => prev && prev.phaseId === t.phaseId && prev.id === t.id ? null : t)
+  }, [])
+  const openPeekPage = useCallback((t: PeekTarget) => {
+    window.dispatchEvent(new CustomEvent('rheo:navigate', { detail: { path: '/life', tab: 'gold', goalId: t.id } }))
+    setPeek(null)
+  }, [])
+
+  /* §4.3 — drafts fold into one amber pocket after the flow (§9.2: D5-amber
+     when the Settings toggle is on, neutral zinc when off). */
+  const [draftsOpen, setDraftsOpen] = useState(false)
+  const draftAccent = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('deskflow-life-draft-accent')
+      if (raw) {
+        const p = JSON.parse(raw)
+        if (typeof p?.enabled === 'boolean') return p.enabled as boolean
+      }
+    } catch { /* default on */ }
+    return true
+  }, [])
+
   const redirectToPageForAdd = useCallback((type: 'covenant' | 'gold' | 'memory') => {
-    const lensMap: Record<string, LensId> = { covenant: 'covenant', gold: 'gold', memory: 'memories' }
-    setLens(lensMap[type] || 'phases')
-    if (redirectMode === 'instant') {
-      /* Route through the lens map, not the raw add-type: 'memory' was never a
-         LensId, so the memory handoff silently never opened its form. */
-      const lens = lensMap[type] || 'phases'
-      redirectToPage(lens)
-      setPendingAdd(lens)
-    } else {
-      const labelMap: Record<string, string> = { covenant: 'Covenant', gold: 'Goal', memory: 'Memory' }
-      // The confirm dialog carries a LensId, so map the add-type to its lens
-      // ('memory' → 'memories') the same way setLens does above.
-      setConfirmRedirect({ lens: lensMap[type] || 'phases', label: labelMap[type] || type })
+    /* §3.7 — the Instant/Confirm toggle died; adds redirect instantly.
+       Covenant hands off to Labs (the tab is parked there since 2026-11-14),
+       with the ?add intent opening its form, same contract the tab honoured. */
+    if (type === 'covenant') {
+      navigate('/labs?add=covenant#covenant')
+      return
     }
-  }, [redirectMode, redirectToPage])
+    const lens: LensId = type === 'gold' ? 'gold' : 'memories'
+    setLens(lens)
+    redirectToPage(lens)
+    setPendingAdd(lens)
+  }, [navigate, redirectToPage])
 
   const openAddForLens = useCallback((nextLens: LensId) => {
     setLens(nextLens)
@@ -349,51 +365,46 @@ export default function LifePage({ initialTab, deepLink, onDeepLinkConsumed }: L
       setAdding(true)
       return
     }
-    if (redirectMode === 'instant') {
-      redirectToPage(nextLens)
-      setPendingAdd(nextLens)
-    } else {
-      const labelMap: Record<string, string> = { covenant: 'Covenant', gold: 'Goal', memories: 'Memory' }
-      setConfirmRedirect({ lens: nextLens, label: labelMap[nextLens] || nextLens })
-    }
-  }, [redirectMode, redirectToPage])
+    /* §3.7 — instant-only: the toggle and its confirm dialog died with it. */
+    redirectToPage(nextLens)
+    if (nextLens !== 'covenant') setPendingAdd(nextLens)
+  }, [redirectToPage])
+
+  /* §4.1/§9.1 — the lens hue law: a lens's color IS its LENS_META entry, no
+     second list. light: steps added per §9.1's ink rule (raw -100 text on
+     cream is unreadable; the ink step carries both themes). ADD_NOUN feeds the
+     + quick-add chips (§3.7: the quick-add row died, its labels survive here). */
+  const ADD_NOUN: Record<LensId, string> = { phases: 'Phase', covenant: 'Covenant', gold: 'Goal', memories: 'Memory' }
 
   const LENS_META: Record<
     LensId,
     {
       label: string
       icon: typeof Layers
-      blurb: string
       activeClass: string
     }
   > = {
     phases: {
       label: 'Phases',
       icon: Layers,
-      blurb: 'The full cross-section — every chapter and every layer visible together.',
-      activeClass: 'border-amber-400/40 bg-amber-400/10 text-amber-100',
+      activeClass: 'border-amber-400/40 bg-amber-400/10 text-amber-100 light:border-amber-500/40 light:bg-amber-500/10 light:text-amber-700',
     },
     covenant: {
       label: 'Covenant',
       icon: Sparkles,
-      blurb: 'The grain brightens — daily promises become texture in the ring.',
-      activeClass: 'border-rose-400/40 bg-rose-500/10 text-rose-100',
+      activeClass: 'border-rose-400/40 bg-rose-500/10 text-rose-100 light:border-rose-500/40 light:bg-rose-500/10 light:text-rose-700',
     },
     gold: {
       label: 'Gold',
       icon: Target,
-      blurb: 'The branches brighten — long-term goals become visible.',
-      activeClass: 'border-amber-400/40 bg-amber-500/10 text-amber-100',
+      activeClass: 'border-amber-400/40 bg-amber-500/10 text-amber-100 light:border-amber-500/40 light:bg-amber-500/10 light:text-amber-700',
     },
     memories: {
       label: 'Memories',
       icon: Images,
-      blurb: 'The amber pockets brighten — kept moments become visible.',
-      activeClass: 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100',
+      activeClass: 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100 light:border-emerald-500/40 light:bg-emerald-500/10 light:text-emerald-700',
     },
   }
-
-  const LensIcon = LENS_META[lens].icon
 
   const drafts = useMemo(() => {
     return (phases ?? [])
@@ -401,14 +412,8 @@ export default function LifePage({ initialTab, deepLink, onDeepLinkConsumed }: L
       .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
   }, [phases])
 
-  const todayISO = todayStr()
-
-  const covenantCount = covenant.commitments?.length ?? 0
-  const covenantCompletionsToday =
-    covenant.completions?.filter((c) => c.date === todayISO).length ?? 0
-
-  const goldCount = goals.length + ltgs.length
-  const memoryCount = memories.items.length
+  /* §3.7 — the preview cards died; these count memos were their only readers.
+     `todayStr()` remains in use by the goal loaders below. */
 
   const scrollToPhase = useCallback((id: string) => {
     setActivePhaseId(id)
@@ -632,7 +637,7 @@ export default function LifePage({ initialTab, deepLink, onDeepLinkConsumed }: L
                     <motion.div
                       layoutId="life-page-pill"
                       className="absolute inset-0 rounded-md"
-                      style={{ background: `${tab.accent}22`, border: `1px solid ${tab.accent}40` }}
+                      style={{ background: `color-mix(in srgb, ${tab.accent} 13%, transparent)`, border: `1px solid color-mix(in srgb, ${tab.accent} 40%, transparent)` }}
                       transition={pillTransition}
                     />
                   )}
@@ -795,282 +800,48 @@ export default function LifePage({ initialTab, deepLink, onDeepLinkConsumed }: L
                 />
               </motion.div>
 
-              {/* River controls — always visible */}
-              <section
-                data-river-controls="always-visible"
-                className="mt-6 space-y-4"
-              >
-                {/* Lens indicator — always visible */}
+              {/* River controls — §4.1: the lens switcher is the river's single
+                  persistent control. §3.7 retired the indicator card, the
+                  quick-add row, the Instant/Confirm toggle, the preview cards
+                  and the draft shelf; the quick-add labels survive as the +
+                  half of each lens chip. */}
+              <section data-river-controls="always-visible" className="mt-6">
                 <div
-                  data-lens-indicator
                   data-section="life.lenses"
-                  className={`flex flex-col gap-3 rounded-xl border bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] px-5 py-4 md:flex-row md:items-center md:justify-between ${LENS_META[lens].activeClass}`}
+                  className="flex flex-wrap items-center gap-1.5"
                 >
-                  <div className="flex items-center gap-3">
-                    <LensIcon className="h-4 w-4" />
-                    <div>
-                      <p className="text-sm font-medium text-zinc-200 light:text-[var(--text-primary)]">
-                        {LENS_META[lens].label} lens active
-                      </p>
-                      <p className="text-[12px] text-zinc-400 light:text-[var(--text-muted)]">
-                        {LENS_META[lens].blurb}
-                      </p>
-                    </div>
-                  </div>
+                  {(Object.keys(LENS_META) as LensId[]).map((key) => {
+                    const Meta = LENS_META[key]
+                    const Icon = Meta.icon
+                    const active = lens === key
 
-                  <div className="flex flex-wrap gap-1">
-                    {(Object.keys(LENS_META) as LensId[]).map((key) => {
-                      const Meta = LENS_META[key]
-                      const Icon = Meta.icon
-
-                      return (
+                    return (
+                      <div
+                        key={key}
+                        className={`inline-flex h-8 items-stretch overflow-hidden rounded-lg border transition-colors ${
+                          active
+                            ? Meta.activeClass
+                            : 'border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface-40)] text-zinc-500 light:text-[var(--text-muted)]'
+                        }`}
+                      >
                         <button
-                          key={key}
                           onClick={() => setLens(key)}
-                          className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] transition-colors ${
-                            lens === key
-                              ? Meta.activeClass
-                              : 'border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface-40)] text-zinc-500 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)]'
-                          }`}
+                          aria-pressed={active}
+                          className="inline-flex items-center gap-1.5 px-2.5 text-[11px] transition-colors hover:text-zinc-200 light:hover:text-[var(--text-primary)]"
                         >
                           <Icon className="h-3.5 w-3.5" />
                           {Meta.label}
                         </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Quick-add toolbar — always visible */}
-                <div
-                  data-quick-add
-                  data-section="life.quick-add"
-                  className="grid grid-cols-2 gap-2 lg:grid-cols-4"
-                >
-                  <button
-                    onClick={() => openAddForLens('phases')}
-                    className={`flex min-h-12 items-center justify-between gap-2 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
-                      lens === 'phases'
-                        ? 'border-amber-400/40 bg-amber-400/10 text-amber-100'
-                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] text-zinc-300 hover:border-zinc-700'
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <Layers className="h-4 w-4" />
-                      New Phase
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => openAddForLens('covenant')}
-                    className={`flex min-h-12 items-center justify-between gap-2 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
-                      lens === 'covenant'
-                        ? 'border-rose-400/40 bg-rose-500/10 text-rose-100'
-                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] text-zinc-300 hover:border-zinc-700'
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4" />
-                      New Covenant
-                    </span>
-
-                    <Plus className="h-4 w-4 text-zinc-500 light:text-[var(--text-muted)]" />
-                  </button>
-
-                  <button
-                    onClick={() => openAddForLens('gold')}
-                    className={`flex min-h-12 items-center justify-between gap-2 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
-                      lens === 'gold'
-                        ? 'border-amber-400/40 bg-amber-500/10 text-amber-100'
-                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] text-zinc-300 light:text-[var(--text-primary)] hover:border-zinc-700 light:hover:border-[var(--ws-border)]'
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <Target className="h-4 w-4" />
-                      New Goal
-                    </span>
-
-                    <Plus className="h-4 w-4 text-zinc-500 light:text-[var(--text-muted)]" />
-                  </button>
-
-                  <button
-                    onClick={() => openAddForLens('memories')}
-                    className={`flex min-h-12 items-center justify-between gap-2 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
-                      lens === 'memories'
-                        ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
-                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] text-zinc-300 light:text-[var(--text-primary)] hover:border-zinc-700 light:hover:border-[var(--ws-border)]'
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <Images className="h-4 w-4" />
-                      New Memory
-                    </span>
-
-                    <Plus className="h-4 w-4 text-zinc-500 light:text-[var(--text-muted)]" />
-                  </button>
-                </div>
-
-                {/* Redirect mode toggle */}
-                <div className="flex items-center justify-end gap-1.5">
-                  <span className="text-[11px] text-zinc-500 light:text-[var(--text-muted)]">Add mode:</span>
-                  <button
-                    onClick={toggleRedirectMode}
-                    className="inline-flex h-6 items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface-40)] px-2 text-[10px] text-zinc-400 light:text-[var(--text-muted)] hover:text-zinc-300 light:hover:text-[var(--text-primary)] transition-colors"
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${redirectMode === 'instant' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                    {redirectMode === 'instant' ? 'Instant' : 'Confirm'}
-                  </button>
-                </div>
-
-                {/* Data preview cards — always visible */}
-                <div
-                  data-preview-cards
-                  className="grid gap-2 md:grid-cols-3"
-                >
-                  <button
-                    onClick={() => setLens('covenant')}
-                    className={`rounded-xl border p-5 text-left transition-colors ${
-                      lens === 'covenant'
-                        ? 'border-rose-400/40 bg-rose-500/10'
-                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] hover:border-zinc-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 text-rose-300">
-                      <Sparkles className="h-4 w-4" />
-                      <span className="text-[11px] uppercase tracking-wider">
-                        Covenant
-                      </span>
-                    </div>
-
-                    <p className="mt-3 text-2xl text-zinc-100">
-                      {covenantCount}
-                    </p>
-
-                    <p className="text-[12px] text-zinc-500 light:text-[var(--text-muted)]">
-                      commitments · {covenantCompletionsToday} kept today
-                    </p>
-                  </button>
-
-                  <button
-                    onClick={() => setLens('gold')}
-                    className={`rounded-xl border p-5 text-left transition-colors ${
-                      lens === 'gold'
-                        ? 'border-amber-400/40 bg-amber-500/10'
-                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] hover:border-zinc-700 light:hover:border-[var(--ws-border)]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 text-amber-300">
-                      <Target className="h-4 w-4" />
-                      <span className="text-[11px] uppercase tracking-wider">
-                        Gold
-                      </span>
-                    </div>
-
-                    <p className="mt-3 text-2xl text-zinc-100 light:text-[var(--text-primary)]">
-                      {goldCount}
-                    </p>
-
-                    <p className="text-[12px] text-zinc-500 light:text-[var(--text-muted)]">
-                      goals and long-term branches
-                    </p>
-                  </button>
-
-                  <button
-                    onClick={() => setLens('memories')}
-                    className={`rounded-xl border p-5 text-left transition-colors ${
-                      lens === 'memories'
-                        ? 'border-emerald-400/40 bg-emerald-500/10'
-                        : 'border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] hover:border-zinc-700 light:hover:border-[var(--ws-border)]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 text-emerald-300">
-                      <Images className="h-4 w-4" />
-                      <span className="text-[11px] uppercase tracking-wider">
-                        Memories
-                      </span>
-                    </div>
-
-                    <p className="mt-3 text-2xl text-zinc-100 light:text-[var(--text-primary)]">
-                      {memoryCount}
-                    </p>
-
-                    <p className="text-[12px] text-zinc-500 light:text-[var(--text-muted)]">
-                      amber pockets kept
-                    </p>
-                  </button>
-                </div>
-
-                {/* Draft shelf — always visible */}
-                <div
-                  data-drafts-shelf
-                  data-section="life.drafts"
-                  className="rounded-xl border border-zinc-800 bg-zinc-900/75 light:bg-[var(--ws-surface-raised)] p-5"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <FileClock className="h-4 w-4 text-amber-300" />
-                      <h3 className="text-sm font-medium text-zinc-100 light:text-[var(--text-primary)]">
-                        Draft chapters
-                      </h3>
-                    </div>
-
-                    <span className="rounded-full bg-zinc-800 px-2 py-1 text-[11px] text-zinc-400 light:text-[var(--text-muted)]">
-                      {drafts.length}
-                    </span>
-                  </div>
-
-                  {drafts.length === 0 ? (
-                    <div className="mt-4 rounded-lg border border-dashed border-zinc-800 p-4">
-                      <p className="text-[13px] text-zinc-500 light:text-[var(--text-muted)]">
-                        No saved drafts yet. Start a chapter and choose
-                        “Save as draft” — it will appear here so you can return to it.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="mt-4 space-y-2">
-                      {drafts.map((draft) => (
-                        <div
-                          key={draft.id}
-                          className="flex flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-950 light:bg-[var(--ws-surface-50)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                        <button
+                          onClick={() => openAddForLens(key)}
+                          aria-label={`New ${ADD_NOUN[key]}`}
+                          className="inline-flex items-center border-l border-black/10 px-1.5 transition-colors hover:bg-black/[0.06] hover:text-zinc-200 light:border-white/10 light:hover:bg-white/10 light:hover:text-[var(--text-primary)]"
                         >
-                          <div className="min-w-0">
-                            <p className="truncate text-sm text-zinc-200 light:text-[var(--text-primary)]">
-                              {draft.title || 'Untitled draft'}
-                            </p>
-                            <p className="mt-0.5 text-[11px] text-zinc-500 light:text-[var(--text-muted)]">
-                              {draft.category}
-                              {draft.updatedAt
-                                ? ` · updated ${new Date(draft.updatedAt).toLocaleString()}`
-                                : ''}
-                            </p>
-                          </div>
-
-                          <div className="flex shrink-0 gap-2">
-                            <button
-                              onClick={() => setEditingPhase(draft)}
-                              className="inline-flex h-8 items-center gap-1 rounded-md border border-amber-400/30 bg-amber-400/10 px-2.5 text-[11px] text-amber-200 hover:bg-amber-400/15"
-                            >
-                              <Pencil className="h-3 w-3" />
-                              Resume
-                            </button>
-
-                            <button
-                              onClick={() =>
-                                savePhase({
-                                  ...draft,
-                                  status: 'complete',
-                                  updatedAt: new Date().toISOString(),
-                                })
-                              }
-                              className="inline-flex h-8 items-center rounded-md border border-zinc-700 light:border-[var(--ws-border)] px-2.5 text-[11px] text-zinc-400 light:text-[var(--text-muted)] hover:text-zinc-200 light:hover:text-[var(--text-primary)]"
-                            >
-                              Mark complete
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                          <Plus className="h-3 w-3" />
+                        </button>
+                      </div>
+                    )
+                  })}
                 </div>
               </section>
 
@@ -1129,10 +900,77 @@ export default function LifePage({ initialTab, deepLink, onDeepLinkConsumed }: L
                       onDetachMemory={handleDetachMemory}
                       onDetachGoal={handleDetachGoal}
                       onOpenPage={handleOpenPage}
+                      onInspect={handleInspect}
                     />
                     </div>
+                    <AnimatePresence>
+                      {peek && peek.phaseId === phase.id && (
+                        <motion.div
+                          key="peek"
+                          initial={{ opacity: 0, y: -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                          transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                          role="region"
+                          aria-label={`Peek: ${peek.label}`}
+                          className={`mt-3 flex items-start gap-3 rounded-xl border p-3 ${ENTITY_COLORS.ltg.border} ${ENTITY_COLORS.ltg.bg} ${ENTITY_COLORS.ltg.lightBorder} ${ENTITY_COLORS.ltg.lightBg}`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className={`text-[10px] uppercase tracking-wider ${ENTITY_COLORS.ltg.text} ${ENTITY_COLORS.ltg.lightText}`}>Long-term goal</p>
+                            <p className="truncate text-[13px] text-zinc-200 light:text-[var(--text-primary)]">{peek.label}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1">
+                            <button
+                              onClick={() => openPeekPage(peek)}
+                              className={`inline-flex h-7 items-center rounded-md border px-2 text-[11px] transition-colors hover:bg-black/[0.05] light:hover:bg-black/[0.03] ${ENTITY_COLORS.ltg.lightBorder} ${ENTITY_COLORS.ltg.text} ${ENTITY_COLORS.ltg.lightText}`}
+                            >
+                              Open full page
+                            </button>
+                            <button
+                              onClick={() => setPeek(null)}
+                              aria-label="Close peek"
+                              className="-m-1 rounded p-1 text-zinc-500 light:text-[var(--text-muted)] transition-colors hover:text-zinc-200 light:hover:text-[var(--text-primary)]"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </motion.div>
                 ))
+              )}
+              {/* §4.3 — drafts fold into one amber pocket AFTER the flow, not a
+                  shelf above it (D5: accent follows the Settings toggle). */}
+              {drafts.length > 0 && (
+                <Collapsible
+                  open={draftsOpen}
+                  onOpenChange={setDraftsOpen}
+                  data-section="life.drafts"
+                  className={draftAccent ? 'rounded-xl border border-dashed border-amber-500/30 bg-amber-500/[0.04]' : 'rounded-xl border border-dashed border-zinc-700/50 bg-zinc-800/20'}
+                >
+                  <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-black/[0.04]">
+                    <span className={`text-[12px] font-medium ${draftAccent ? 'text-amber-300' : 'text-zinc-300 light:text-[var(--text-primary)]'}`}>
+                      Drafts ({drafts.length})
+                    </span>
+                    <ChevronDown
+                      className={`h-4 w-4 ${draftAccent ? 'text-amber-400/70' : 'text-zinc-500'} transition-transform duration-200 ${draftsOpen ? 'rotate-180' : ''}`}
+                    />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="grid gap-3 px-4 pb-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {drafts.map((d) => (
+                        <DraftCard
+                          key={d.id}
+                          note={{ id: d.id, title: d.title || 'Untitled draft', content: '', updated_at: d.updatedAt }}
+                          meta={[categoryOf(d.category).label, phaseSpanLabel(d)].filter(Boolean).join(' · ')}
+                          onResume={() => { setEditingPhase(d); setPeek(null) }}
+                          onDiscard={(id) => deletePhase(id)}
+                        />
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               )}
             </div>
           </div>
@@ -1159,32 +997,6 @@ export default function LifePage({ initialTab, deepLink, onDeepLinkConsumed }: L
           />
 
           {viewing && <MemoryLightbox memory={viewing} onClose={() => setViewing(null)} />}
-
-          {/* Confirm Redirect Dialog */}
-          {confirmRedirect && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/80 p-4" onClick={() => setConfirmRedirect(null)} role="dialog" aria-modal="true" aria-labelledby="confirm-redirect-title">
-              <div className="w-full max-w-sm bg-zinc-900/95 light:bg-[var(--ws-surface-raised)] border border-zinc-700 rounded-xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-                <h3 className="text-base font-semibold text-zinc-100 mb-2">Switch to Pages mode?</h3>
-                <p className="text-[13px] text-zinc-400 mb-5">
-                  Open the {confirmRedirect.label} page to create with all available fields.
-                </p>
-                <div className="flex gap-2 justify-end">
-                  <button
-                    onClick={() => setConfirmRedirect(null)}
-                    className="h-9 rounded-lg border border-zinc-700 px-4 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => { redirectToPage(confirmRedirect.lens); setPendingAdd(confirmRedirect.lens); setConfirmRedirect(null) }}
-                    className="h-9 rounded-lg bg-amber-400/15 border border-amber-400/30 px-4 text-sm text-amber-100 hover:bg-amber-400/25 transition-colors"
-                  >
-                    Go to page
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
       </div>

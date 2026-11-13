@@ -712,7 +712,18 @@ function NoteEditor({ open, onOpenChange, initial, onSave, existingGroups = [], 
 }
 
 // ── Draft Card ──
-export function DraftCard({ note, onResume, onDiscard }: { note: Note; onResume: (n: Note) => void; onDiscard: (id: string) => void }) {
+/* §4.3 — DraftCard widened generically so phase drafts wear the same grammar:
+   accent rail, Resume, Discard and the "Empty draft..." fallback stay identical;
+   `meta` lets a caller swap the body line for its own descriptor (e.g.
+   category · span for phase drafts). The Note callers are unchanged. */
+export interface DraftCardSource {
+  id: string
+  title: string
+  content?: string | null
+  updated_at?: string | null
+}
+
+export function DraftCard<T extends DraftCardSource = Note>({ note, onResume, onDiscard, meta }: { note: T; onResume: (n: T) => void; onDiscard: (id: string) => void; meta?: string }) {
   // D5: draft accent responds to the Settings toggle. When off, drafts render neutral.
   let accentEnabled = true;
   try {
@@ -733,9 +744,9 @@ export function DraftCard({ note, onResume, onDiscard }: { note: Note; onResume:
         <h4 className="warmth-serif text-[14px] text-zinc-200 line-clamp-1">{note.title || 'Untitled draft'}</h4>
         <button onClick={() => onDiscard(note.id)} className="text-zinc-600 hover:text-rose-400 transition-colors"><Trash2 size={12} /></button>
       </div>
-      <p className="text-[12px] text-zinc-500 line-clamp-2 mb-3">{note.content || 'Empty draft...'}</p>
+      <p className="text-[12px] text-zinc-500 line-clamp-2 mb-3">{meta ?? (note.content || 'Empty draft...')}</p>
       <div className="flex items-center justify-between">
-        <span className="text-[10px] text-zinc-600 font-mono">{formatDistanceToNow(note.updated_at)}</span>
+        <span className="text-[10px] text-zinc-600 font-mono">{note.updated_at ? formatDistanceToNow(note.updated_at) : ''}</span>
         <button onClick={() => onResume(note)} className={cn("text-[11px] transition-colors", accent ? "text-amber-400 hover:text-amber-300" : "text-zinc-400 hover:text-zinc-200")}>Resume</button>
       </div>
     </div>

@@ -217,9 +217,8 @@ const life: PageManifest = {
 
   sections: [
     { id: 'life.river', label: 'River', icon: 'Waves', keywords: ['river', 'flow', 'timeline', 'canvas', 'ring', 'lens'] },
-    { id: 'life.lenses', label: 'River Lenses', icon: 'Compass', keywords: ['lens', 'phases', 'gold', 'memories', 'covenant', 'view'] },
-    { id: 'life.quick-add', label: 'Quick Add', icon: 'Plus', keywords: ['quick add', 'new', 'create', 'phase', 'goal', 'memory'] },
-    { id: 'life.drafts', label: 'Draft Chapters', icon: 'PenTool', keywords: ['draft', 'shelf', 'unfinished', 'wip'] },
+    { id: 'life.lenses', label: 'River Lenses', icon: 'Compass', keywords: ['lens', 'phases', 'gold', 'memories', 'covenant', 'view', 'quick add', 'new', 'create', 'phase', 'goal', 'memory'] },
+    { id: 'life.drafts', label: 'Draft Chapters', icon: 'PenTool', keywords: ['draft', 'shelf', 'unfinished', 'wip', 'pocket'] },
   ],
 
   tutorial: {

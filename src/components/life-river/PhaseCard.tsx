@@ -8,6 +8,7 @@ import { WarmCard } from '../../features/warmth/WarmCard'
 import type { LoadedMemory } from '../../features/memories/useMemories'
 import { AnimatedCircularProgressBar } from '@/components/ui/animated-circular-progress-bar'
 import type { LongTermGoal } from '@/components/dashboard/types'
+import { ENTITY_COLORS } from '@/lib/CategoryColors'
 import {
   categoryOf,
   getContrastColor,
@@ -114,6 +115,9 @@ interface PhaseCardProps {
   onKeepReflection: (phase: LifePhase, text: string) => void
   onOpenMemory: (memory: LoadedMemory) => void
   onJump?: (phaseId: string) => void
+  /* §4.2 — LTG chips inspect in place: the peek card renders in the river flow
+     under this phase card (LifePage owns the render; this only reports the tap). */
+  onInspect?: (target: { phaseId: string; kind: 'ltg'; id: string; label: string }) => void
   lens: LensId
   onAddMemory?: () => void
   onAddGoal?: () => void
@@ -148,6 +152,7 @@ export function PhaseCard({
   onKeepReflection,
   onOpenMemory,
   onJump,
+  onInspect,
   lens,
   onAddMemory,
   onAddGoal,
@@ -306,7 +311,7 @@ export function PhaseCard({
           className="relative flex h-64 w-full items-end gap-4 rounded-t-xl p-6 text-left overflow-hidden"
           style={{
             backgroundColor: color,
-            boxShadow: `0 25px 50px -12px ${color}40`,
+            boxShadow: `0 25px 50px -12px color-mix(in srgb, ${color} 25%, transparent)`,
           }}
         >
           {/* Photo layer (parallax) */}
@@ -751,12 +756,23 @@ export function PhaseCard({
           <div className={sectionOpacity('gold')}>
             <p className="mb-2 text-[10.5px] uppercase tracking-wider text-zinc-600">Long-term goals</p>
             <ul className="space-y-1.5">
-              {phaseLtgs.map(ltg => (
-                <li key={ltg.id} className="flex items-center gap-2.5 rounded-lg border border-zinc-800/60 bg-zinc-900/40 light:bg-[var(--ws-surface-raised)] px-2.5 py-2">
-                  <Ring pct={ltg.progress ?? 0} />
-                  <span className="min-w-0 flex-1 truncate text-[12.5px] text-zinc-300">{ltg.title}</span>
-                </li>
-              ))}
+              {phaseLtgs.map(ltg => {
+                const E = ENTITY_COLORS.ltg
+                return (
+                  <li key={ltg.id} className="flex">
+                    {/* §4.2 — a chip click INSPECTS (peek card in the flow), it
+                        does not navigate — same rationale as NoteDetailView's. */}
+                    <button
+                      onClick={() => onInspect?.({ phaseId: phase.id, kind: 'ltg', id: ltg.id, label: ltg.title })}
+                      title={`${ltg.title} — inspect`}
+                      className={`flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors hover:brightness-110 ${E.border} ${E.bg} ${E.text} ${E.lightBorder} ${E.lightBg} ${E.lightText}`}
+                    >
+                      <Ring pct={ltg.progress ?? 0} />
+                      <span className="min-w-0 flex-1 truncate text-[12.5px]">{ltg.title}</span>
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
           </div>
         )}
