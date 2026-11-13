@@ -25606,6 +25606,117 @@ if (!gotTheLock) {
           return { ok: false, error: String(err?.message ?? err).slice(0, 160) };
         }
       });
+
+      /* ── THE ISLAND'S WRITE HANDLERS (HALO_FIT §5 backend gaps) ───────────────
+       * RESULT.md's IPC rule for every new island write, verbatim in effect: "the
+       * island sends, main validates and decides. Payload is typed. Reply is
+       * `{ ok: boolean; error?: string }`. Text is length-capped in main, never
+       * trusted from the island. Rate-limited to one write per second per channel.
+       * The island never writes the stopwatch."
+       *
+       * The rate limiter is ONE shared table so the rule is literally one write per
+       * second PER CHANNEL — three different channels may each accept one write in
+       * the same second, and one channel spamming does not starve the others. */
+      const haloWriteLastAt = new Map<string, number>();
+      const haloRateGate = (channel: string): string | null => {
+        const nowMs = Date.now();
+        const last = haloWriteLastAt.get(channel) ?? 0;
+        haloWriteLastAt.set(channel, nowMs);
+        return nowMs - last < 1000 ? 'Slow down — one write per second.' : null;
+      };
+
+      // ── halo:start-focus ─────────────────────────────────────────────────────
+      // The island's Tools → Focus hold-to-start (N1). This is the SAME engine the
+      // app's Focus page drives — `focusManager.start()` — with the island allowed
+      // to set only the two knobs its UI exposes: a duration and the strictness.
+      // `durationSec: 0` is the manager's own stopwatch mode (no countdown, ends
+      // manually) — that vocabulary belongs to the manager, not invented here.
+      electron_1.ipcMain.handle('halo:start-focus', (_e, input: { durationSec?: number; strictness?: string }) => {
+        const gate = haloRateGate('start-focus');
+        if (gate) return { ok: false, error: gate };
+        const fm: any = focusManager;
+        if (!fm || typeof fm.start !== 'function') return { ok: false, error: 'The focus engine is not available.' };
+        /* VALIDATION BEFORE THE MANAGER. `durationSec` must be an integer 0..86400
+         * (0 = stopwatch mode); `strictness` must be one of the two rules the manager
+         * actually implements. Anything else is rejected, not clamped into a
+         * different session than the user asked for. */
+        const durationSec = Math.trunc(Number(input?.durationSec));
+        if (!Number.isFinite(durationSec) || durationSec < 0 || durationSec > 86_400) {
+          return { ok: false, error: 'Duration must be between 0 and 24 hours.' };
+        }
+        const strictness = input?.strictness === 'non_allowed' ? 'non_allowed' : 'distracting';
+        try {
+          const state = fm.start({ durationSec, strictness });
+          if (!state) return { ok: false, error: 'The focus engine refused the session.' };
+          return { ok: true, state: fm.getPublicState?.() ?? null };
+        } catch (err: any) {
+          return { ok: false, error: String(err?.message ?? err).slice(0, 160) };
+        }
+      });
+
+      // ── halo:break ───────────────────────────────────────────────────────────
+      // N2's "back at" promise. The break COUNTDOWN lives in the island only — main
+      // stores the window and broadcasts it, so the AFK machinery in every window
+      // (island's afkGap card, app's prompt) can honor the same promise instead of
+      // the island whispering to itself. untilMs is bounded to now..+8h: a promise
+      // for next Tuesday is not a break, and a past timestamp is a lie.
+      let haloBreakUntilMs = 0;
+      electron_1.ipcMain.handle('halo:break', (_e, input: { untilMs?: number; action?: string }) => {
+        const gate = haloRateGate('break');
+        if (gate) return { ok: false, error: gate };
+        try {
+          /* action:'end' — the island closes the break early (break-due nudge or the
+           * user back early). Everything else must carry a valid untilMs. */
+          if (input?.action === 'end') {
+            haloBreakUntilMs = 0;
+          } else {
+            const untilMs = Math.trunc(Number(input?.untilMs));
+            if (!Number.isFinite(untilMs)) return { ok: false, error: 'A break needs an end time.' };
+            const nowMs = Date.now();
+            if (untilMs <= nowMs) return { ok: false, error: 'That break time has already passed.' };
+            if (untilMs > nowMs + 8 * 3_600_000) return { ok: false, error: 'A break cannot last more than 8 hours.' };
+            haloBreakUntilMs = untilMs;
+          }
+          for (const w of electron_1.BrowserWindow.getAllWindows()) {
+            if (!w.isDestroyed()) {
+              try { w.webContents.send('halo:break', { untilMs: haloBreakUntilMs }); } catch { /* a dead window must not fail the write */ }
+            }
+          }
+          return { ok: true, untilMs: haloBreakUntilMs };
+        } catch (err: any) {
+          return { ok: false, error: String(err?.message ?? err).slice(0, 160) };
+        }
+      });
+      /* The read side, so a freshly opened window learns the CURRENT promise instead
+       * of waiting for the next change to hear about it. */
+      electron_1.ipcMain.handle('halo:get-break', () => ({ ok: true, untilMs: haloBreakUntilMs }));
+
+      // ── halo:quick-note ──────────────────────────────────────────────────────
+      // N3 quick capture. Writes the REAL `notes` table the Life page already reads —
+      // a capture that vanishes into an island-only store would be the dishonest kind.
+      // Content is capped in MAIN (500 chars after trim), the title is the first line
+      // when it is short enough to be one, and the island's own blank capture is
+      // rejected rather than inserted as an empty row.
+      electron_1.ipcMain.handle('halo:quick-note', (_e, input: { text?: string }) => {
+        const gate = haloRateGate('quick-note');
+        if (gate) return { ok: false, error: gate };
+        if (useJson || !db) return { ok: false, error: 'The database is not available.' };
+        try {
+          const text = String(input?.text ?? '').trim().slice(0, 500);
+          if (!text) return { ok: false, error: 'Nothing to capture.' };
+          /* The first line becomes the title ONLY when the capture is short; a 400-char
+           * stream of thought is content, not a title. */
+          const firstLine = text.split('\n')[0].trim();
+          const title = firstLine.length > 0 && firstLine.length <= 80 && text.indexOf('\n') === -1 ? firstLine : '';
+          const id = 'note_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+          db.prepare(
+            `INSERT INTO notes (id, title, content, tags, group_name) VALUES (?, ?, ?, '[]', '')`,
+          ).run(id, title, text);
+          return { ok: true, id };
+        } catch (err: any) {
+          return { ok: false, error: String(err?.message ?? err).slice(0, 160) };
+        }
+      });
     } catch { /* handler registration must never break startup */ }
 
     // ── halo:get-focus ────────────────────────────────────────────────────────

@@ -2505,6 +2505,14 @@ contextBridge.exposeInMainWorld('haloBridge', {
   /* The active external activity session (Gym / Study / …) — the pill's resident
      companion kind. `session: null` with `ok: true` means "nothing is running". */
   getExternalSession: () => ipcRenderer.invoke('halo:get-external-session'),
+  /* The island's writes (HALO_FIT §5): main validates, rate-limits, and answers
+     { ok, error? } — the island never writes the stopwatch. */
+  startFocus: (input: { durationSec: number; strictness?: 'distracting' | 'non_allowed' }) =>
+    ipcRenderer.invoke('halo:start-focus', input),
+  setBreak: (input: { untilMs?: number; action?: 'start' | 'end' }) =>
+    ipcRenderer.invoke('halo:break', input),
+  getBreak: () => ipcRenderer.invoke('halo:get-break'),
+  quickNote: (text: string) => ipcRenderer.invoke('halo:quick-note', { text }),
   onSnapshot: (cb: (snapshot: unknown) => void) => {
     const handler = (_event: unknown, snapshot: unknown) => cb(snapshot);
     ipcRenderer.on('halo:snapshot', handler);
