@@ -11,7 +11,7 @@
 //
 // Stack: shadcn/ui (base-nova) · motion v12 · lucide-react · Tailwind v4
 
-import { useState, useEffect, useCallback, useRef, type ReactNode, type DragEvent as ReactDragEvent } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Activity, Calendar, Sparkles, Target, AlertCircle, Zap, BarChart3,
@@ -63,6 +63,14 @@ function readLocal<T>(key: string): T | null {
     return raw ? (JSON.parse(raw) as T) : null;
   } catch {
     return null;
+  }
+}
+
+function persistLocal(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Storage full — silent fail
   }
 }
 
@@ -353,7 +361,6 @@ type StateFilter = 'all' | 'on' | 'off';
 
 /** Natural (un-squeezed) render size for a widget inside a preview cell. */
 const PREVIEW_NATURAL_W = 300;
-const PREVIEW_NATURAL_H = 260;
 /** One dashboard "row" in px — converts ROW_TEMPLATES height units to pixels. */
 const PREVIEW_ROW_H = 92;
 
@@ -396,15 +403,75 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
   // its cell. Widgets lay out at NATURAL_W and are visually shrunk, so their
   // internal stat rows never collide the way they do when squeezed narrow.
   const [gridW, setGridW] = useState(0);
+  const [gridH, setGridH] = useState(0);
   useEffect(() => {
     const el = gridRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(entries => {
-      for (const e of entries) setGridW(e.contentRect.width);
+      for (const e of entries) {
+        setGridW(e.contentRect.width);
+        setGridH(e.contentRect.height);
+      }
     });
     ro.observe(el);
     setGridW(el.getBoundingClientRect().width);
     return () => ro.disconnect();
+  }, []);
+
+  // ── Pane split (draggable divider between workbench and mirror) ──────────
+  const SPLIT_KEY = 'dashboard_library_split';
+  const [splitPct, setSplitPctState] = useState<number>(() => {
+    const s = readLocal<number>(SPLIT_KEY);
+    return typeof s === 'number' && s >= 28 && s <= 62 ? s : 38;
+  });
+  const splitRef = useRef(splitPct);
+  splitRef.current = splitPct;
+  const setSplitPct = useCallback((v: number) => {
+    const clamped = Math.round(Math.min(62, Math.max(28, v)));
+    setSplitPctState(clamped);
+  }, []);
+  const panesRef = useRef<HTMLDivElement>(null);
+  const splitDragging = useRef(false);
+  const [splitActive, setSplitActive] = useState(false);
+  const onSplitDown = useCallback((e: ReactPointerEvent) => {
+    splitDragging.current = true;
+    setSplitActive(true);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }, []);
+  const onSplitMove = useCallback((e: ReactPointerEvent) => {
+    if (!splitDragging.current || !panesRef.current) return;
+    const r = panesRef.current.getBoundingClientRect();
+    setSplitPct(((e.clientX - r.left) / r.width) * 100);
+  }, [setSplitPct]);
+  const onSplitUp = useCallback((e: ReactPointerEvent) => {
+    if (splitDragging.current) persistLocal(SPLIT_KEY, splitRef.current);
+    splitDragging.current = false;
+    setSplitActive(false);
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+  }, []);
+
+  // ── Mirror viewport mode ──────────────────────────────────────────────────
+  // 'fit'   — rows follow the pane width; proportions come from ROW_TEMPLATES
+  //           (the menu's own proportion).
+  // 'device'— a framed viewport at the USER'S APP WINDOW aspect ratio; the
+  //           dashboard renders at that device width and scales into the frame.
+  const MIRROR_KEY = 'dashboard_library_mirror_mode';
+  const [mirrorMode, setMirrorModeState] = useState<'fit' | 'device'>(() =>
+    readLocal<string>(MIRROR_KEY) === 'device' ? 'device' : 'fit');
+  const setMirrorMode = useCallback((m: 'fit' | 'device') => {
+    setMirrorModeState(m);
+    persistLocal(MIRROR_KEY, m);
+  }, []);
+
+  // The user's actual app window — the "device" the mirror simulates.
+  const [winSize, setWinSize] = useState(() => ({
+    w: typeof window !== 'undefined' ? window.innerWidth : 1440,
+    h: typeof window !== 'undefined' ? window.innerHeight : 900,
+  }));
+  useEffect(() => {
+    const onResize = () => setWinSize({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   // Close the preset popover on outside click
@@ -1036,144 +1103,217 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
     }
   }
 
-  const renderDashboardPreview = () => (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center justify-between mb-2.5">
-        <h2 className="text-[13px] font-semibold text-[var(--text-primary)]">
-          Your Dashboard
-          <span className="ml-2 text-[11px] font-normal text-[var(--text-muted)]">
-            ({visibleWidgets.length} · real components)
-          </span>
-        </h2>
-        <span className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-[0.1em]">
-          hover a cell to remove
-        </span>
-      </div>
+  // Shared row renderer — the mirror's geometry at any given layout width.
+  // Cells render REAL components at their REAL proportional width (w share of
+  // the breakpoint columns), never transform-squeezed, so the mirror looks like
+  // the live dashboard instead of a shrunken mock.
+  const MIRROR_GAP = 10;
+  const mirrorCellW = (layoutW: number, bc: number, colSpan: number): number =>
+    layoutW > 0 ? ((layoutW - MIRROR_GAP * (bc - 1)) / bc) * colSpan + MIRROR_GAP * (colSpan - 1) : 0;
 
-      {visibleWidgets.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--color-card-50)] p-8 text-center min-h-[200px]">
-          <LayoutDashboard size={24} className="text-[var(--text-muted)] mb-2 opacity-50" />
-          <p className="text-[12px] text-[var(--text-secondary)]">
-            Your dashboard is empty.
-          </p>
-          <p className="text-[11px] text-[var(--text-muted)] mt-1">
-            Flip a switch on any card in the workbench.
-          </p>
-        </div>
-      ) : (
-        <div
-          ref={gridRef}
-          className={`relative flex-1 min-h-0 rounded-xl border-2 transition-colors ${
-            dragOverDashboard ? 'border-[var(--page-accent)] bg-[var(--page-accent-5)]' : 'border-[var(--border-subtle)]'
-          }`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onDragEnd={() => handleDragEnd()}
-        >
-          {/* Drop overlay */}
-          <AnimatePresence>
-            {dragOverDashboard && (
+  const renderMirrorRows = (layoutW: number) => (
+    <div className="flex flex-col" style={{ gap: MIRROR_GAP }}>
+      {previewGroups.map((group, gi) => (
+        <div key={`row-${gi}`} className="flex" style={{ gap: MIRROR_GAP }}>
+          {group.map(cell => {
+            const widget = visibleWidgets.find(w => w.id === cell.widgetId);
+            if (!widget) return null;
+            const position = previewLookup.get(widget.id) ?? { col: 0, row: 0, colSpan: cell.colSpan, rowSpan: Math.max(1, Math.round(cell.height / PREVIEW_ROW_H)), bc: cell.bc, height: cell.height };
+            const theme = getWidgetTheme(widget.id);
+            const RealComponent = WidgetRegistry.get(widget.id)?.component;
+            const cellW = mirrorCellW(layoutW, position.bc, position.colSpan);
+            const cellH = position.height;
+
+            return (
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 flex items-center justify-center bg-[var(--page-accent-10)] rounded-xl pointer-events-none"
+                key={widget.id}
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, transition: { duration: 0.1 } }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                className="relative group rounded-lg border bg-[var(--color-card)] overflow-hidden shrink-0"
+                style={{
+                  width: cellW,
+                  height: cellH,
+                  borderColor: `color-mix(in srgb, ${theme.accent} 24%, transparent)`,
+                }}
               >
-                <div className="flex items-center gap-2 text-[var(--page-accent)]">
-                  <Plus size={16} />
-                  <span className="text-sm font-medium">Drop to add card</span>
-                </div>
+                {/* Remove button */}
+                <button
+                  type="button"
+                  onClick={() => removeWidget(widget.id)}
+                  className="absolute top-1 right-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--error-15)] text-[var(--error)] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--error-25)]"
+                  aria-label={`Remove ${widget.name}`}
+                >
+                  <X size={10} />
+                </button>
+
+                {/* Real component at real width — same rendering the live dashboard gives it */}
+                {RealComponent ? (
+                  <div
+                    className="overflow-hidden"
+                    style={{ width: cellW, height: cellH, pointerEvents: 'none' }}
+                  >
+                    <RealComponent />
+                  </div>
+                ) : (
+                  <div className="p-2.5 flex items-center justify-center h-full">
+                    <p className="text-[10px] text-[var(--text-muted)]">{widget.name}</p>
+                  </div>
+                )}
               </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Grid preview — rows stack vertically; each cell's width/height come
-              from the ROW_TEMPLATES mirror of the live dashboard, not from an
-              invented grid, so the preview's dimensions match reality. */}
-          <div className="p-3 flex-1 min-h-0 overflow-y-auto">
-            <div className="flex flex-col" style={{ gap: 8 }}>
-              {previewGroups.map((group, gi) => (
-                <div key={`row-${gi}`} className="flex" style={{ gap: 8 }}>
-                  {group.map(cell => {
-                    const widget = visibleWidgets.find(w => w.id === cell.widgetId);
-                    if (!widget) return null;
-                    const position = previewLookup.get(widget.id) ?? { col: 0, row: 0, colSpan: cell.colSpan, rowSpan: Math.max(1, Math.round(cell.height / PREVIEW_ROW_H)), bc: cell.bc, height: cell.height };
-                    const theme = getWidgetTheme(widget.id);
-
-                    const RealComponent = WidgetRegistry.get(widget.id)?.component;
-
-                    // Scale the widget to fit its dashboard-accurate cell. The widget
-                    // renders at NATURAL_W/NATURAL_H (its real proportions) and is scaled
-                    // down to the size the live dashboard would give it, so the preview
-                    // mirrors real dimensions instead of an invented grid.
-                    const GAP = 8;
-                    const cellW = gridW > 0
-                      ? (gridW - GAP * (position.bc - 1)) / position.bc * position.colSpan + GAP * (position.colSpan - 1)
-                      : 0;
-                    const scale = cellW > 0 ? Math.min(cellW / PREVIEW_NATURAL_W, position.height / PREVIEW_NATURAL_H) : 0;
-                    const cellH = position.height;
-
-                    return (
-                      <motion.div
-                        key={widget.id}
-                        layout
-                        initial={{ opacity: 0, scale: 0.97 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, transition: { duration: 0.1 } }}
-                        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                        className="relative group rounded-lg border bg-[var(--color-card)] overflow-hidden"
-                        style={{
-                          width: cellW,
-                          height: cellH,
-                          borderColor: `color-mix(in srgb, ${theme.accent} 24%, transparent)`,
-                        }}
-                      >
-                        {/* Remove button */}
-                        <button
-                          type="button"
-                          onClick={() => removeWidget(widget.id)}
-                          className="absolute top-1 right-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--error-15)] text-[var(--error)] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--error-25)]"
-                          aria-label={`Remove ${widget.name}`}
-                        >
-                          <X size={10} />
-                        </button>
-
-                        {/* Actual widget component preview — real component, real context data,
-                            laid out at natural size then scaled to fit the cell */}
-                        {RealComponent ? (
-                          <div
-                            className="overflow-hidden"
-                            style={{ height: cellH }}
-                          >
-                            <div
-                              style={{
-                                width: PREVIEW_NATURAL_W,
-                                height: PREVIEW_NATURAL_H,
-                                transform: scale ? `scale(${scale})` : undefined,
-                                transformOrigin: 'top left',
-                                pointerEvents: 'none',
-                              }}
-                            >
-                              <RealComponent />
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="p-2.5 flex items-center justify-center h-full">
-                            <p className="text-[10px] text-[var(--text-muted)]">{widget.name}</p>
-                          </div>
-                        )}
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </div>
+            );
+          })}
         </div>
-      )}
+      ))}
     </div>
   );
+
+  const renderDashboardPreview = () => {
+    // Device mode geometry — the user's real app window is the device.
+    const aspect = winSize.h > 0 ? winSize.w / winSize.h : 16 / 9;
+    const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+    const g = gcd(winSize.w, winSize.h) || 1;
+    const aspectLabel = `${Math.round(winSize.w / g)}:${Math.round(winSize.h / g)}`;
+    const deviceW = Math.min(winSize.w, 1920);
+    // fit-mode rows live inside a p-3 scroll container → subtract its padding
+    const paneInner = Math.max(0, gridW - 24);
+    const availW = Math.max(0, gridW);
+    const availH = Math.max(0, gridH);
+    const frameW = Math.min(availW, availH * aspect);
+    const frameH = frameW / aspect;
+    const CHROME = 24;
+    const deviceScale = deviceW > 0 && frameW > 0 ? frameW / deviceW : 0;
+    const contentH = previewGroups.reduce((s, row) => s + row.reduce((m, c) => Math.max(m, c.height), 0), 0)
+      + Math.max(0, previewGroups.length - 1) * MIRROR_GAP;
+
+    const modeSeg = (value: 'fit' | 'device', label: string) => (
+      <button
+        onClick={() => setMirrorMode(value)}
+        aria-pressed={mirrorMode === value}
+        className={`px-2 py-1 rounded-md text-[10px] font-mono uppercase tracking-[0.08em] transition-colors ${
+          mirrorMode === value
+            ? 'bg-[var(--page-accent-15)] text-[var(--page-accent)]'
+            : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+        }`}
+      >
+        {label}
+      </button>
+    );
+
+    return (
+      <div className="flex flex-col h-full min-h-0">
+        <div className="flex items-center justify-between mb-2.5 gap-2">
+          <h2 className="text-[13px] font-semibold text-[var(--text-primary)] shrink-0">
+            Your Dashboard
+            <span className="ml-2 text-[11px] font-normal text-[var(--text-muted)]">
+              ({visibleWidgets.length} · real components)
+            </span>
+          </h2>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center gap-0.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--color-card)] p-0.5 shrink-0">
+              {modeSeg('fit', 'Pane fit')}
+              {modeSeg('device', 'Device aspect')}
+            </div>
+            {mirrorMode === 'device' && (
+              <span className="font-mono text-[9px] text-[var(--text-muted)] border border-[var(--border-subtle)] rounded px-1.5 py-0.5 shrink-0">
+                {aspectLabel} · {deviceW}w
+              </span>
+            )}
+            <span className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-[0.1em] shrink-0 hidden xl:inline">
+              hover a cell to remove
+            </span>
+          </div>
+        </div>
+
+        {visibleWidgets.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--color-card-50)] p-8 text-center min-h-[200px]">
+            <LayoutDashboard size={24} className="text-[var(--text-muted)] mb-2 opacity-50" />
+            <p className="text-[12px] text-[var(--text-secondary)]">
+              Your dashboard is empty.
+            </p>
+            <p className="text-[11px] text-[var(--text-muted)] mt-1">
+              Flip a switch on any card in the workbench.
+            </p>
+          </div>
+        ) : (
+          <div
+            ref={gridRef}
+            className={`relative flex-1 min-h-0 rounded-xl border-2 transition-colors ${
+              dragOverDashboard ? 'border-[var(--page-accent)] bg-[var(--page-accent-5)]' : 'border-[var(--border-subtle)]'
+            }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onDragEnd={() => handleDragEnd()}
+          >
+            {/* Drop overlay */}
+            <AnimatePresence>
+              {dragOverDashboard && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 flex items-center justify-center bg-[var(--page-accent-10)] rounded-xl pointer-events-none"
+                >
+                  <div className="flex items-center gap-2 text-[var(--page-accent)]">
+                    <Plus size={16} />
+                    <span className="text-sm font-medium">Drop to add card</span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {mirrorMode === 'fit' ? (
+              /* PANE FIT — rows follow the pane width; proportions from ROW_TEMPLATES */
+              <div className="p-3 h-full overflow-y-auto">
+                {renderMirrorRows(paneInner)}
+              </div>
+            ) : (
+              /* DEVICE ASPECT — a framed viewport at the user's app-window ratio */
+              <div className="flex items-center justify-center h-full p-3 overflow-hidden">
+                {frameW > 0 && (
+                  <div
+                    className="flex flex-col rounded-lg overflow-hidden shrink-0"
+                    style={{
+                      width: frameW,
+                      height: frameH,
+                      border: '1px solid var(--border-subtle)',
+                      background: 'var(--color-card)',
+                    }}
+                  >
+                    {/* device chrome */}
+                    <div className="flex items-center gap-1.5 px-2 shrink-0" style={{ height: CHROME }}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--border-subtle)]" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--border-subtle)]" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--border-subtle)]" />
+                      <span className="ml-2 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                        RHEO · {aspectLabel}
+                      </span>
+                    </div>
+                    {/* scaled dashboard at device width */}
+                    <div className="overflow-y-auto overflow-x-hidden" style={{ height: frameH - CHROME }}>
+                      <div style={{ width: deviceW * deviceScale, height: contentH * deviceScale }}>
+                        <div
+                          style={{
+                            width: deviceW,
+                            transform: deviceScale ? `scale(${deviceScale})` : undefined,
+                            transformOrigin: 'top left',
+                          }}
+                        >
+                          {renderMirrorRows(deviceW)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // ── Render: Preview Modal ─────────────────────────────────────────────────
 
@@ -1396,7 +1536,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
 
   const innerContent = (
     <div
-      className="relative w-full h-full max-w-[1600px] max-h-[92vh] rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] shadow-2xl overflow-hidden flex flex-col min-h-0"
+      className="relative w-full flex-1 min-h-0 max-w-[1600px] rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] shadow-2xl overflow-hidden flex flex-col min-h-0"
       onClick={e => e.stopPropagation()}
     >
       {/* Workbench motion + switch styles — scoped to this surface, reduced-motion aware */}
@@ -1439,19 +1579,36 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
 
       {/* Main content — workbench left, live mirror right */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        <div className="flex h-full gap-4 px-4 py-2 min-h-0">
-          {/* Workbench — left panel */}
-          <div className="w-[480px] flex-shrink-0 border-r border-[var(--border-subtle)] pr-4 min-h-0">
-            <div className="h-full min-h-0 overflow-hidden">
-              {renderWorkbench()}
-            </div>
+        <div ref={panesRef} className="flex h-full px-4 py-2 min-h-0">
+          {/* Workbench — left panel, width follows the splitter */}
+          <div
+            className="h-full min-h-0 shrink-0"
+            style={{ width: `${splitPct}%`, minWidth: 300, maxWidth: '62%' }}
+          >
+            {renderWorkbench()}
+          </div>
+
+          {/* Splitter — drag to change the list ⇄ display proportion */}
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Adjust panel split"
+            onPointerDown={onSplitDown}
+            onPointerMove={onSplitMove}
+            onPointerUp={onSplitUp}
+            onPointerCancel={onSplitUp}
+            onDoubleClick={() => setSplitPct(38)}
+            className={`w-2 shrink-0 cursor-col-resize flex items-center justify-center group transition-colors ${
+              splitActive ? 'bg-[var(--page-accent)]/10' : ''
+            }`}
+            title="Drag to resize · double-click to reset"
+          >
+            <div className="h-12 w-1 rounded-full bg-[var(--border-subtle)] group-hover:bg-[var(--page-accent)] transition-colors" />
           </div>
 
           {/* Dashboard mirror — right panel */}
-          <div className="flex-1 min-w-0">
-            <div className="h-full min-h-0 overflow-hidden">
-              {renderDashboardPreview()}
-            </div>
+          <div className="flex-1 min-w-0 h-full min-h-0">
+            {renderDashboardPreview()}
           </div>
         </div>
       </div>
@@ -1480,7 +1637,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
   if (!data) {
     // Loading state — the menu never silently vanishes while data resolves.
     return (
-      <div className="relative w-full h-full max-w-[1600px] max-h-[92vh] rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] shadow-2xl overflow-hidden flex flex-col min-h-0 p-6">
+      <div className="relative w-full flex-1 min-h-0 max-w-[1600px] rounded-xl border border-[var(--border-subtle)] bg-[var(--color-card)] shadow-2xl overflow-hidden flex flex-col min-h-0 p-6">
         <div className="animate-pulse flex flex-col gap-3 h-full">
           <div className="h-8 w-64 rounded-lg bg-white/[0.05]" />
           <div className="h-11 rounded-xl bg-white/[0.04]" />
@@ -1504,7 +1661,7 @@ export function CardLibrary({ onChanged, onSaved, previews, onClose, data }: Car
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.12 }}
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-stretch justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
       onClick={() => onClose?.()}
     >
       {innerContent}
