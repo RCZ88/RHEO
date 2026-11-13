@@ -59,7 +59,7 @@ import {
 } from '../../shared/halo/slotModel';
 import { AmbientCard, AmbientDot, AmbientPip } from './AmbientCard';
 import { formatStopwatch, reloadFromStorage, startStopwatchDriver, stopwatch, type StopwatchSnapshot } from '../../lib/stopwatchStore';
-import type { AiUsagePayload, HudPayload, NextDeadlinePayload, IslandActivity } from '../../shared/halo/types';
+import type { AiUsagePayload, ExternalPayload, HudPayload, NextDeadlinePayload, IslandActivity } from '../../shared/halo/types';
 
 /**
  * OverlayRoot — the island surface.
@@ -358,7 +358,7 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
    *   1. A producer that FAILS produces NO activity. Its widget then shows its honest
    *      empty sentence. Creating an entry with zeros would be a fabricated measurement.
    *   2. A `null` field means UNKNOWN, not zero, and the card renders `unknown` for it. */
-  const [producers, setProducers] = useState<{ ai?: AiUsagePayload; hud?: HudPayload; deadline?: NextDeadlinePayload; dictation?: DictationPayload }>({});
+  const [producers, setProducers] = useState<{ ai?: AiUsagePayload; hud?: HudPayload; deadline?: NextDeadlinePayload; external?: ExternalPayload; dictation?: DictationPayload }>({});
   /* The Schedule page's two facts (nearest class block + every open deadline with its alarm),
    * and the real focus session. All three are MAIN-side reads, so they arrive by pull rather
    * than through the renderer-owned snapshot. */
@@ -375,7 +375,7 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
   useEffect(() => {
     let cancelled = false;
     const pull = async () => {
-      const next: { ai?: AiUsagePayload; hud?: HudPayload; deadline?: NextDeadlinePayload } = {};
+      const next: { ai?: AiUsagePayload; hud?: HudPayload; deadline?: NextDeadlinePayload; external?: ExternalPayload } = {};
       let dlError: string | null = null;
       try {
         const ai = await bridge?.getAiUsage?.();
@@ -386,7 +386,24 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
       try {
         const hud = await bridge?.getTerminalUsage?.();
         if (!cancelled && hud && !hud.error && hud.activeSessions != null) {
-          next.hud = { activeSessions: hud.activeSessions, commandsToday: hud.commandsToday ?? undefined, handbookPercent: hud.handbookPercent ?? undefined };
+          next.hud = { activeSessions: hud.activeSessions, commandsToday: hud.commandsToday ?? undefined, handbookPercent: hud.handbookPercent ?? undefined, waiting: hud.waiting ?? undefined };
+        }
+      } catch { /* honest empty — no entry */ }
+      /* THE EXTERNAL SESSION — HALO_FIT's resident companion kind (Gym / Study / …).
+       * Same three-state honesty as nextDeadline, with one difference: "nothing is
+       * running" is the NORMAL state here, so ok:true + session:null produces NO entry
+       * and the pill simply stays on the stopwatch. Only an explicit ok:false (or a
+       * throw) is a failure, and for the pill a failure also produces no kind — an
+       * unreadable table must never masquerade as "no session". The expanded row gets
+       * its own error surface when it lands. */
+      try {
+        const ex = await bridge?.getExternalSession?.();
+        if (!cancelled && ex?.ok && ex.session) {
+          next.external = {
+            ...(ex.session.name ? { name: ex.session.name } : {}),
+            ...(ex.session.type != null ? { type: ex.session.type } : {}),
+            ...(ex.session.startedAtMs != null ? { startedAtMs: ex.session.startedAtMs } : {}),
+          };
         }
       } catch { /* honest empty — no entry */ }
       /* `nextDeadline` — the first promoted kind with a REAL producer. It reads the

@@ -2502,6 +2502,9 @@ contextBridge.exposeInMainWorld('haloBridge', {
     ipcRenderer.invoke('halo:add-reminder', deadlineId, data),
   deleteReminder: (id: string) => ipcRenderer.invoke('halo:delete-reminder', id),
   getTerminalUsage: () => ipcRenderer.invoke('halo:get-terminal-usage'),
+  /* The active external activity session (Gym / Study / …) — the pill's resident
+     companion kind. `session: null` with `ok: true` means "nothing is running". */
+  getExternalSession: () => ipcRenderer.invoke('halo:get-external-session'),
   onSnapshot: (cb: (snapshot: unknown) => void) => {
     const handler = (_event: unknown, snapshot: unknown) => cb(snapshot);
     ipcRenderer.on('halo:snapshot', handler);

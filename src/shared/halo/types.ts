@@ -227,6 +227,25 @@ export interface HudPayload {
   activeSessions?: number;
   commandsToday?: number;
   handbookPercent?: number;
+  /**
+   * Agents waiting for the user (`AgentPhase === 'attention'`), counted live from the
+   * in-memory `agentStates` machine — the DB has no such column, so this is the one
+   * producer that reads process state. 0 is a measurement ("nobody needs you"), and
+   * absent (undefined) means the field did not arrive (older main).
+   */
+  waiting?: number;
+}
+
+/**
+ * `external` — the active external activity session (Gym / Study / …), the island's
+ * resident companion kind. Shaped per HALO_FIT §"external session": the pill needs a
+ * NAME and a START TIME; everything else stays in the app.
+ */
+export interface ExternalPayload {
+  name?: string;
+  type?: string | null;
+  /** epoch ms the session started; null when the stored stamp could not be parsed. */
+  startedAtMs?: number | null;
 }
 
 /** `focus` — no producer exists yet; shape per the RESULT's countdown spec. */

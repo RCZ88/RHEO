@@ -25703,7 +25703,7 @@ if (!gotTheLock) {
       });
 
       electron_1.ipcMain.handle('halo:get-terminal-usage', () => {
-        if (useJson || !db) return { activeSessions: null, commandsToday: null, handbookPercent: null };
+        if (useJson || !db) return { activeSessions: null, commandsToday: null, handbookPercent: null, waiting: 0 };
         try {
           // "Active" = a session updated within the last 5 minutes. There is no
           // is_active column, so this is derived from updated_at rather than invented.
@@ -25714,13 +25714,66 @@ if (!gotTheLock) {
                   AND updated_at >= datetime('now', '-5 minutes')`,
             )
             .get();
+          /* AGENTS NEEDING INPUT — HALO_FIT's "agent attention" producer. `agentStates`
+           * (main.ts AgentPhase) is the LIVE in-memory machine for every PTY agent;
+           * 'attention' is set the moment a confirmation prompt is detected. The DB has
+           * no such column, so this is the one producer that MUST read process state —
+           * and it is cheap: one Map scan on a 30-second poll. 0 is a measurement
+           * ("nobody needs you"), same honesty rule as activeSessions. */
+          let waiting = 0;
+          try {
+            for (const st of agentStates.values()) {
+              if (st?.phase === 'attention') waiting += 1;
+            }
+          } catch { /* defensive: a poisoned registry must not blank the widget */ }
           return {
             activeSessions: Number(active?.n ?? 0),
+            waiting,
             commandsToday: null, // no command-count column exists; reported as unknown
             handbookPercent: null, // handbook progress has no table; unknown, not fake
           };
         } catch (e) {
-          return { activeSessions: null, commandsToday: null, handbookPercent: null, error: String(e?.message ?? e) };
+          return { activeSessions: null, commandsToday: null, handbookPercent: null, waiting: 0, error: String(e?.message ?? e) };
+        }
+      });
+
+      /* ── halo:get-external-session ─────────────────────────────────────────────
+       * The active external activity session (Gym / Study / …) — HALO_FIT's rank-9
+       * resident companion kind. This is the SAME row the app window reads through
+       * `get-active-external-session`; it is re-shaped for the pill because the pill
+       * needs a NAME and a START TIME, not the whole row.
+       *
+       * Honesty contract, same three-state rule as every halo producer:
+       *   ok:true, session:null -> the table answered: nothing is running. Normal.
+       *   ok:false              -> unreadable; the pill renders NO kind (a failure must
+       *                            never masquerade as "no session").
+       * `started_at` is stored as a TEXT ISO stamp, so `Date.parse` is the honest
+       * parser; an unparseable stamp is reported as null, never invented to 0. */
+      electron_1.ipcMain.handle('halo:get-external-session', () => {
+        if (useJson || !db) return { ok: true, session: null };
+        try {
+          const row = db
+            .prepare(
+              `SELECT es.started_at, ea.name, ea.type
+                 FROM external_sessions es
+                 JOIN external_activities ea ON es.activity_id = ea.id
+                WHERE es.ended_at IS NULL
+                ORDER BY es.started_at DESC
+                LIMIT 1`,
+            )
+            .get() as Record<string, unknown> | undefined;
+          if (!row) return { ok: true, session: null };
+          const startedAtMs = Date.parse(String(row.started_at ?? ''));
+          return {
+            ok: true,
+            session: {
+              name: String(row.name ?? ''),
+              type: row.type == null ? null : String(row.type),
+              startedAtMs: Number.isFinite(startedAtMs) ? startedAtMs : null,
+            },
+          };
+        } catch (e) {
+          return { ok: false, session: null, error: String(e?.message ?? e) };
         }
       });
     } catch (e) {
