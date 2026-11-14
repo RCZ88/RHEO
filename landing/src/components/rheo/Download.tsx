@@ -646,7 +646,7 @@ const DEG_PER_UNIT = 3.6; // pointer degrees per dial unit (hairline dist)
 const OPEN_DETENT = 40;
 const RF = 25; // face orbit radius rf=25 — gear saturates: clamp(25/22,0,1)=1
 const VAULT_PHI0 = 180; // start angle (face space); dial rises as phi decreases
-const LAP_SAMPLES = 50; // sweep grid: 50 intervals × 25ms = 1,250ms (V4)
+const LAP_SAMPLES_MIN = 24; // constant-velocity grid floor (see LAP_CAL_VELOCITY)
 const LAP_STEP_MS = 25;
 const READINESS_MS = 1200; // fresh-read wait ceiling (V3)
 const REST_CEILING_MS = 2500; // coast/rest normalization ceiling (V3)
@@ -738,14 +738,20 @@ function vaultDispatch(
 // spin.w clamp — so the arc under-integrated ~20 units and the dial stalled
 // on the detent BELOW 40 (settles 20/10, vault never opens). New profile:
 // constant-rate bulk for LAP_BULK of the lap, then a linear decel to zero.
-// Integral is exactly 1 by construction of C; peak dial velocity
-// S·C/T ≈ 101 u/s (S=111, T=1.25s) stays under the clamp, so the full arc
-// integrates and the tail arrives at the detent with w≈0 — the settle spring
-// snaps ONto 40. Animated laps add LAP_OVERSHOOT_UNITS to compensate the
-// lerp-startup lag (~3–4 units, measured); rm keeps the exact rev-3 arc.
+// Integral is exactly 1 by construction of C; the tail arrives at the detent
+// with w≈0 — the settle spring snaps ONto 40. Animated laps add
+// LAP_OVERSHOOT_UNITS to compensate the lerp-startup lag (~3–4 units,
+// measured at ~100 u/s); rm keeps the exact rev-3 arc.
+// v10.1: peak dial velocity is HELD at LAP_CAL_VELOCITY for every sweep size
+// by scaling the sweep duration with S (T = S·C/V ⇒ S·C/T = V, constant).
+// The deployed v10.0 build under-integrated large laps with its fixed
+// 1,250ms duration: the sweep ran full yet the vault settled CLOSED while
+// the same session's rm lap opened. At a constant ~100 u/s the lag stays in
+// the calibrated band and the ±150 u/s clamp is never approached.
 const LAP_BULK = 0.75;
 const LAP_OVERSHOOT_UNITS = 3;
 const LAP_RATE_C = 1 / (0.5 + 0.5 * LAP_BULK);
+const LAP_CAL_VELOCITY = 100; // u/s — the velocity the overshoot was measured at
 function lapProgress(t: number): number {
   if (t <= LAP_BULK) return LAP_RATE_C * t;
   const d = (t - LAP_BULK) / (1 - LAP_BULK); // 0..1 across the decel
@@ -821,6 +827,14 @@ async function dialLap(
     return { ok: false, a0: null };
   }
 
+  // Fast path: the vault is ALREADY open (the previous narrative left it open
+  // and the user flipped tabs). A lap here would spin a pointless full turn,
+  // and probeDial cannot read an open dial — no fresh "dial" reads flow while
+  // open (measured live: V5 abort when flipping tabs from the open state).
+  if (stage.querySelectorAll("path.sil.hi").length === 3) {
+    return { ok: true, a0: OPEN_DETENT };
+  }
+
   // coast/rest normalization: end any user drag, let the dial stop (existing)
   const start = facePoint(VAULT_PHI0);
   vaultDispatch(stage, "pointerleave", start[0], start[1]);
@@ -841,53 +855,85 @@ async function dialLap(
   if (delta < 60) delta += 100;
   // Lap profile (PROBLEMS #154): the rev-3 ease-out peaked ~261 u/s — over
   // hairline's ±150 u/s spin clamp — so the arc under-integrated ~20 units and
-  // the dial stalled short of detent 40. Animated laps bulk-travel
-  // +LAP_OVERSHOOT_UNITS beyond target (compensating the measured lerp-startup
-  // lag, ~3–4u at ~100 u/s) under the new constant-rate profile, whose worst
-  // peak S·C/T ≈ 149 u/s stays under the clamp; rm keeps the exact rev-3 arc
-  // (synchronous dispatch has no startup deficit).
-  const sweepUnits = delta + 1 + (rm ? 0 : LAP_OVERSHOOT_UNITS);
-  const sweepDeg = sweepUnits * DEG_PER_UNIT; // +1 unit: settle snaps ONto 40 (V2)
-  const phiEnd = VAULT_PHI0 - sweepDeg; // dial increases as pointer angle decreases
-
-  const dispatchSample = (i: number, t: number) => {
-    const phi = VAULT_PHI0 - sweepDeg * lapProgress(t);
-    const [sx, sy] = facePoint(phi);
-    vaultDispatch(
-      stage,
-      i === 0 ? "pointerdown" : i === LAP_SAMPLES ? "pointerup" : "pointermove",
-      sx,
-      sy,
+  // the dial stalled short of detent 40. The constant-rate profile (v10.1)
+  // holds the peak dial velocity at LAP_CAL_VELOCITY for every sweep size by
+  // scaling the duration with S. v10.2: hairline's post-release coast/settle
+  // dynamics are not modelable from outside — on the deployed build the sweep
+  // ran FULL at both 132 and 100 u/s peaks and the vault still settled
+  // CLOSED, while the same session's rm lap opened. So the animated path is
+  // CLOSED-LOOP: the visual sweep, then re-probe the dial (probeDial) and
+  // correct with short low-velocity laps — at ≤15 u/s the lag/coast error
+  // approaches zero and the landing is exact — until it reads ON 40. rm
+  // stays open-loop (proven: synchronous dispatch has no startup deficit).
+  const runSweep = async (units: number, vel: number) => {
+    const sweepDeg = units * DEG_PER_UNIT; // signed: negative sweeps backward
+    const phiEnd = VAULT_PHI0 - sweepDeg; // dial increases as pointer angle decreases
+    // Constant-velocity grid: duration T = |S|·C/vel seconds, sampled at
+    // LAP_STEP_MS; the FINAL sample is pointerup at the EXACT target (V4).
+    const lapSamples = Math.max(
+      LAP_SAMPLES_MIN,
+      Math.round(((Math.abs(units) * LAP_RATE_C) / vel) * (1000 / LAP_STEP_MS)),
     );
+    const dispatchSample = (i: number, t: number) => {
+      const phi = VAULT_PHI0 - sweepDeg * lapProgress(t);
+      const [sx, sy] = facePoint(phi);
+      vaultDispatch(
+        stage,
+        i === 0 ? "pointerdown" : i === lapSamples ? "pointerup" : "pointermove",
+        sx,
+        sy,
+      );
+    };
+    if (rm) {
+      // Reduced motion: synchronous dispatch of the same points and target (V4)
+      for (let i = 0; i <= lapSamples; i++) dispatchSample(i, i / lapSamples);
+      vaultDispatch(stage, "pointerleave", ...facePoint(phiEnd));
+      return;
+    }
+    const t0 = performance.now();
+    let i = 0;
+    await new Promise<void>((resolve) => {
+      const iv = setInterval(() => {
+        if (i > lapSamples) {
+          clearInterval(iv);
+          resolve();
+          return;
+        }
+        // wall-clock progress self-corrects timer jitter (V4)
+        const t =
+          i === lapSamples
+            ? 1
+            : Math.min(1, (performance.now() - t0) / (lapSamples * LAP_STEP_MS));
+        dispatchSample(i, t);
+        i++;
+      }, LAP_STEP_MS);
+    });
+    vaultDispatch(stage, "pointerleave", ...facePoint(phiEnd));
   };
 
   if (rm) {
-    // Reduced motion: synchronous dispatch of the same points and target (V4)
-    for (let i = 0; i <= LAP_SAMPLES; i++) dispatchSample(i, i / LAP_SAMPLES);
-    vaultDispatch(stage, "pointerleave", ...facePoint(phiEnd));
+    // +1 unit: settle snaps ONto 40 (V2); synchronous, no overshoot needed
+    await runSweep(delta + 1, LAP_CAL_VELOCITY);
     return { ok: true, a0 };
   }
 
-  const t0 = performance.now();
-  let i = 0;
-  await new Promise<void>((resolve) => {
-    const iv = setInterval(() => {
-      if (i > LAP_SAMPLES) {
-        clearInterval(iv);
-        resolve();
-        return;
-      }
-      // wall-clock progress self-corrects timer jitter (V4); the FINAL sample
-      // is pointerup at the EXACT target
-      const t =
-        i === LAP_SAMPLES
-          ? 1
-          : Math.min(1, (performance.now() - t0) / (LAP_SAMPLES * LAP_STEP_MS));
-      dispatchSample(i, t);
-      i++;
-    }, LAP_STEP_MS);
-  });
-  vaultDispatch(stage, "pointerleave", ...facePoint(phiEnd));
+  // Animated: the visual lap at LAP_CAL_VELOCITY, then closed-loop correction.
+  await runSweep(delta + 1 + LAP_OVERSHOOT_UNITS, LAP_CAL_VELOCITY);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    // coast/rest normalization: the read tracks a moving dial ("dial NN") and
+    // leaves "dial" once the settle spring has stopped (existing behavior)
+    const restBy2 = performance.now() + REST_CEILING_MS;
+    while (/dial/.test(readRef.current) && performance.now() < restBy2) await wait(60);
+    const a1 = await probeDial(stage, readRef, start);
+    if (a1 === null) {
+      console.error("[hairline] vault dial unreadable after lap — correction skipped (V5)");
+      break;
+    }
+    if (a1 === OPEN_DETENT) break; // the gate fired — the vault is open
+    const dFwd = (OPEN_DETENT - a1 + 100) % 100;
+    const units = dFwd <= 100 - dFwd ? dFwd : dFwd - 100; // shortest arc, signed
+    await runSweep(units, attempt === 0 ? 15 : 5);
+  }
   return { ok: true, a0 };
 }
 
@@ -928,7 +974,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // §7b runtime stamp — proves the v10.0 bundle is actually served (module scope:
 // logs once per load, not per render).
-console.log("%c[FigureInstrument] v10.0 loaded", "color: #fbbf24; font-weight: bold");
+console.log("%c[FigureInstrument] v10.3 loaded", "color: #fbbf24; font-weight: bold");
 
 function FigureInstrument({ rm }: { rm: boolean }) {
   const [mode, setMode] = useState<"vault" | "layers">("vault");
