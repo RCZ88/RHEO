@@ -136,6 +136,14 @@ interface Store {
   /** epoch ms when the running segment began, or 0 when stopped/paused */
   runningSinceMs: number;
   paused: boolean;
+  /**
+   * A pause the tier watchdog set for timerBehavior.distractingAction:'pause'.
+   * While it is in force (and the active tier is still distracting) external
+   * `setPaused(false)` calls are IGNORED — every browser-extension payload says
+   * "the user is actively browsing" and used to instantly undo the pause. It is
+   * cleared by leaving the distracting tier or by `setDistractingPause(false)`.
+   */
+  distractingSelfPause: boolean;
   activeTier: StopwatchTier;
   /** the tier we were on last tick, so a productive↔distracting flip is detected once */
   lastTickTier: StopwatchTier | null;
@@ -184,6 +192,7 @@ function fresh(): Store {
     distractingAccumulatedMs: 0,
     runningSinceMs: 0,
     paused: false,
+    distractingSelfPause: false,
     activeTier: 'neutral',
     lastTickTier: null,
     lastInteractionAtMs: Date.now(),
@@ -228,6 +237,33 @@ function rollToNewDay() {
  * copies the fields onto the live singleton so subscribers keep the same object identity
  * that `getSnapshot` memoises against.
  */
+/** Sync the stopwatch's accumulated time with the DB (daemon's tracked time).
+ *  Called on app open so the stopwatch reflects actual tracked time, not
+ *  a stale independent accumulator. */
+export async function syncWithDb(): Promise<void> {
+  try {
+    const api = (typeof window !== 'undefined') ? (window as any).deskflowAPI : null;
+    if (!api?.getTodayTrackedSeconds) return;
+    const dbSeconds = await api.getTodayTrackedSeconds();
+    if (typeof dbSeconds === 'number' && dbSeconds >= 0) {
+      const storeTotal = store.productiveAccumulatedMs + store.neutralAccumulatedMs + store.distractingAccumulatedMs;
+      if (dbSeconds * 1000 > storeTotal) {
+        store.productiveAccumulatedMs = dbSeconds * 1000;
+        store.neutralAccumulatedMs = 0;
+        store.distractingAccumulatedMs = 0;
+        store.runningSinceMs = store.paused ? 0 : Date.now();
+        store.lastTickTier = null;
+        store.resetCount += 1;
+        store.revision += 1;
+        emit();
+        persist();
+      }
+    }
+  } catch (err) {
+    // DB sync is best-effort - don't break the timer
+  }
+}
+
 export function reloadFromStorage(): void {
   const next = hydrate();
   store.productiveAccumulatedMs = next.productiveAccumulatedMs;
@@ -241,7 +277,8 @@ export function reloadFromStorage(): void {
   store.revision = next.revision ?? store.revision;
   store.lastInteractionAtMs = next.lastInteractionAtMs;
   store.runningSinceMs = store.paused ? 0 : Date.now();
-  snapshot = computeSnapshot();
+  setSharedSnapshot(computeSnapshot());
+  snapshot = getSharedSnapshot();
   emit();
 }
 
@@ -261,7 +298,20 @@ function hydrate(): Store {
     // reason: it predates day tracking, so we cannot claim it belongs to today.
     if (typeof saved?.dayKey === 'string' && saved.dayKey === localDayKey()) {
       // same day — keep the totals
-    } else {
+    } else if (typeof saved?.dayKey === 'string') {
+      // different day — reset
+      return fresh();
+    }
+    // No dayKey (old format or missing) — keep the totals if reasonable,
+    // don't reset just because dayKey is absent. The safety net below catches
+    // corrupt/stale data. This prevents the timer from resetting on every
+    // app open when persisted data lacks a dayKey.
+    const totalMs = (typeof saved?.productiveAccumulatedMs === 'number' ? saved.productiveAccumulatedMs : 0)
+      + (typeof saved?.neutralAccumulatedMs === 'number' ? saved.neutralAccumulatedMs : 0)
+      + (typeof saved?.distractingAccumulatedMs === 'number' ? saved.distractingAccumulatedMs : 0);
+    const savedExternalMs = (saved?.external?.running && typeof saved.external.startedAtMs === 'number')
+      ? (Date.now() - saved.external.startedAtMs) : 0;
+    if (totalMs > 4 * 60 * 60 * 1000 || savedExternalMs > 4 * 60 * 60 * 1000) {
       return fresh();
     }
     /* THE AFK HEARTBEAT, CROSS-WINDOW. The Halo island is a second JS realm: it only learns
@@ -284,10 +334,27 @@ function hydrate(): Store {
   return base;
 }
 
-const store: Store = hydrate();
+// Singleton: attach to window so all module instances share one store.
+// Vite may create separate module instances across chunks; this ensures
+// every consumer (DashboardPage, StatusBand, Halo island) operates on the
+// SAME store, so reset() affects the displayed timer.
+const store: Store = (typeof window !== 'undefined' && (window as any).__rheoStopwatchStore)
+  ? (window as any).__rheoStopwatchStore
+  : hydrate();
+if (typeof window !== 'undefined') (window as any).__rheoStopwatchStore = store;
 
-let snapshot: StopwatchSnapshot = computeSnapshot();
+// Share snapshot and listeners across module instances via window.
+const _g2 = (typeof window !== 'undefined') ? window as any : {};
+if (!_g2.__rheoStopwatchSnapshot) _g2.__rheoStopwatchSnapshot = computeSnapshot();
+// `snapshot` is now always read from the global, so all instances see updates.
+function getSharedSnapshot(): StopwatchSnapshot { return _g2.__rheoStopwatchSnapshot; }
+function setSharedSnapshot(s: StopwatchSnapshot): void { _g2.__rheoStopwatchSnapshot = s; }
+let snapshot: StopwatchSnapshot = _g2.__rheoStopwatchSnapshot;
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
+// Share snapshot across module instances via window.
+if (typeof window !== 'undefined' && !(window as any).__rheoStopwatchSnapshot) {
+  (window as any).__rheoStopwatchSnapshot = snapshot;
+}
 
 function computeSnapshot(): StopwatchSnapshot {
   const live = liveSegment();
@@ -359,8 +426,14 @@ function liveSegment(): number {
 }
 
 function emit() {
-  snapshot = computeSnapshot();
-  for (const l of store.listeners) l();
+  const s = computeSnapshot();
+  setSharedSnapshot(s);
+  snapshot = s;
+  // Notify ALL listeners across all module instances.
+  const listeners = (typeof window !== 'undefined' && (window as any).__rheoStopwatchListeners)
+    ? (window as any).__rheoStopwatchListeners
+    : store.listeners;
+  for (const l of listeners) l();
 }
 
 /**
@@ -483,7 +556,7 @@ export const stopwatch = {
   },
 
   getSnapshot(): StopwatchSnapshot {
-    return snapshot;
+    return getSharedSnapshot();
   },
 
   /** Bank the in-flight segment into the accumulator and stop the clock. */
@@ -513,6 +586,14 @@ export const stopwatch = {
     haltSegment(); // bank under the OUTGOING tier before it changes
     store.activeTier = next;
     store.lastTickTier = next;
+    // Leaving the distracting tier ends a pause the watchdog set for
+    // distractingAction:'pause' — the resume-on-leaving behaviour used to live
+    // in DashboardPage's transition effect, i.e. only while that page was
+    // mounted. Entering distracting again re-pauses via the watchdog.
+    if (store.distractingSelfPause && next !== 'distracting') {
+      store.distractingSelfPause = false;
+      store.paused = false;
+    }
     reconcile();
     persist();
   },
@@ -533,8 +614,15 @@ export const stopwatch = {
    * this is only the shared readout.
    */
   setExternalSession(next: { running: boolean; startedAtMs?: number; label?: string }): void {
-    const running = !!next.running;
-    const startedAtMs = running ? next.startedAtMs ?? Date.now() : 0;
+    let running = !!next.running;
+    // Reject stale start times: an external session that "started" more than
+    // 24h ago is corrupt/stale data. Treat it as not running so the timer
+    // doesn't show an absurd number like 125h.
+    let startedAtMs = running ? next.startedAtMs ?? Date.now() : 0;
+    if (running && startedAtMs < Date.now() - 4 * 60 * 60 * 1000) {
+      running = false;
+      startedAtMs = 0;
+    }
     const label = next.label ?? '';
     if (
       store.external.running === running &&
@@ -554,6 +642,40 @@ export const stopwatch = {
       haltSegment();
       store.paused = true;
     } else {
+      // NO absorption here. The island's own resume paths — the pill's pause
+      // button and "track this deadline" (OverlayRoot toggleTrack) — call this
+      // plain, and they must always work. The ONLY unpause that must be blocked
+      // is the browser-extension payload ("user is actively browsing") in
+      // DashboardPage's handler, which checks isDistractingSelfPaused() itself.
+      store.paused = false;
+      store.lastInteractionAtMs = Date.now();
+      reconcile();
+    }
+    emit();
+    persist();
+  },
+
+  /** True while a watchdog pause for distractingAction:'pause' is in force. */
+  isDistractingSelfPaused(): boolean {
+    return !!store.distractingSelfPause;
+  },
+
+  /**
+   * Pause/unpause on behalf of timerBehavior.distractingAction:'pause' (the
+   * tier watchdog). NOT a user pause: the flag marks it so DashboardPage's
+   * browser-payload handler can refuse to unpause it, while the island's own
+   * resume paths stay free to unpause at any time. Cleared here, by leaving
+   * the distracting tier (`setTier`), or explicitly with `false`.
+   */
+  setDistractingPause(on: boolean): void {
+    if (on) {
+      if (store.distractingSelfPause && store.paused) return;
+      store.distractingSelfPause = true;
+      haltSegment();
+      store.paused = true;
+    } else {
+      if (!store.distractingSelfPause) return; // never clear someone else's state
+      store.distractingSelfPause = false;
       store.paused = false;
       store.lastInteractionAtMs = Date.now();
       reconcile();
@@ -588,13 +710,21 @@ export const stopwatch = {
     store.dayKey = localDayKey();
     store.resetCount += 1;
     store.revision += 1;
+    // Also clear any running external session so the display zeroes too.
+    store.external = { running: false, startedAtMs: 0, label: '' };
     emit();
     persist();
   },
 
   /** Record that the user is still here, so idle time stays excluded. */
   touch(): void {
+    const wasIdle =
+      store.runningSinceMs === 0 ||
+      (idleGateActive() && Date.now() - store.lastInteractionAtMs > idleThresholdMs());
     store.lastInteractionAtMs = Date.now();
+    if (wasIdle && !store.paused && !store.external.running && store.hasRealApp) {
+      store.runningSinceMs = Date.now();
+    }
     // REVIVE. Something outside this module can halt the store (the AFK
     // detector, a pause, losing the foreground window), and the component that
     // would otherwise restart it may not even be mounted — `App.tsx` remounts
@@ -622,6 +752,22 @@ export const stopwatch = {
       emit();
       return;
     }
+    const totalMs = store.productiveAccumulatedMs + store.neutralAccumulatedMs + store.distractingAccumulatedMs;
+    const externalMs = store.external.running ? (Date.now() - store.external.startedAtMs) : 0;
+    if (totalMs > 4 * 60 * 60 * 1000 || externalMs > 4 * 60 * 60 * 1000) {
+      store.productiveAccumulatedMs = 0;
+      store.neutralAccumulatedMs = 0;
+      store.distractingAccumulatedMs = 0;
+      store.runningSinceMs = store.paused ? 0 : Date.now();
+      store.lastTickTier = null;
+      store.dayKey = localDayKey();
+      store.resetCount += 1;
+      store.revision += 1;
+      store.external = { running: false, startedAtMs: 0, label: '' };
+      persist();
+      emit();
+      return;
+    }
 
     if (store.runningSinceMs !== 0 && Date.now() - store.lastInteractionAtMs > idleThresholdMs()) {
       // Crossed the idle threshold: bank what was earned and stop.
@@ -634,6 +780,7 @@ export const stopwatch = {
       haltSegment();
       if (shouldResetStopwatch()) {
         store.productiveAccumulatedMs = 0;
+        store.neutralAccumulatedMs = 0;
         store.distractingAccumulatedMs = 0;
         store.lastTickTier = null;
         store.resetCount += 1;

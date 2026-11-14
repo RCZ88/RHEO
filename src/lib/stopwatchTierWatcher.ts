@@ -263,7 +263,11 @@ export function createStopwatchTierWatcher(sources: WatcherSources) {
         // A REAL browser exit is handled authoritatively by onForeground below,
         // which clears site state itself — so ignoring the clear here loses
         // nothing.
-        const app = sources.getForegroundApp();
+        // Internally-tracked foreground (same source the payloads are gated
+        // on) with the getter as fallback — a getter-only read here failed the
+        // guard whenever the host ref had not synced, which is precisely the
+        // cold-start/stale-ref window the spurious clear exploits.
+        const app = currentApp || sources.getForegroundApp();
         const candidates = sources.getTrackingBrowsers();
         if (app && candidates.length > 0 && sources.isBrowserApp(app, candidates)) {
           log('clear ignored — browser still confirmed foreground (no app switch)');
