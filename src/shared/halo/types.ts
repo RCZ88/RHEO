@@ -89,6 +89,12 @@ export type ActivityKind =
   /* HALO_FIT rank 3 — the "back at" promise. Live state; the countdown lives in the
    * island, main only stores + broadcasts the window (halo:break / halo:get-break). */
   | 'break'
+  /* HALO_FIT ranks 6-8 — the transient notice. ONE kind carries every designed toast
+   * (drift, break due, break over, resume note, capture ack, reset recap): they never
+   * coexist (each replaces the previous via replaceGroup), so separate kinds would be
+   * five renderers of the same three-part pill. The rank difference between them is
+   * moot for the same reason; the QUEUE ORDER comment in activityPriority.ts. */
+  | 'notice'
   /* HALO spec section 6 compact kinds (HALO_STATES.html board 1). */
   | 'website'
   | 'private'
@@ -279,6 +285,20 @@ export interface NextBlockPayload {
 export interface BreakPayload {
   /** epoch ms the break ends. */
   untilMs: number;
+}
+
+/**
+ * `notice` — HALO_FIT ranks 6-8, the island's transient voice. One designed pill:
+ * [icon][state word or note][mono numeral?]. `tone` picks the hairline treatment;
+ * `durationMs` is the spec'd hold (drift 8s, recap 4s, acks 2-3s, resume 8s).
+ */
+export interface NoticePayload {
+  icon: 'trend' | 'coffee' | 'check' | 'note';
+  /** The state word ("Drifting", "Break due") or the note's own text. */
+  label: string;
+  /** The mono numeral, when the notice measures something ("4m", "1h 52m"). */
+  mono?: string;
+  tone?: 'warn' | 'ok' | 'dim';
 }
 
 /** `focus` — no producer exists yet; shape per the RESULT's countdown spec. */

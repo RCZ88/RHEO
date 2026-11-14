@@ -46,6 +46,15 @@ export function priorityForKind(kind: ActivityKind): number {
       // and above the imminent class (550). A promise you made to yourself outranks
       // upcoming context but must never steal the pill from a live recording.
       return PRIORITY.breakPromise;
+    case 'notice':
+      // HALO_FIT ranks 6-8 (drift / break due / acks + resume + recap), all toast-lane.
+      // The spec splits them across three ranks, but they share ONE transient slot and
+      // can never coexist — each replaces the previous — so the split would order
+      // things that are never simultaneously present. They sit in the unused
+      // directUserFeedback band: below critical (900, the only higher toast) and above
+      // every live state, because a toast the queue chose to raise has already won
+      // that comparison by existing at all.
+      return PRIORITY.directUserFeedback;
       // DEVIATION 3 — 550, between focus (600) and the running stopwatch (500).
       // "Your class starts in 8 minutes" outranks the accumulating stopwatch
       // precisely because the stopwatch does not interrupt anything (see

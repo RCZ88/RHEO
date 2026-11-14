@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { LayoutGroup, AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { Coffee, GripHorizontal, Mic, Pause, Pin, Play, RotateCcw, SquareTerminal, StickyNote, Timer, X } from 'lucide-react';
+import { Coffee, Eye, EyeOff, GripHorizontal, Mic, NotebookPen, Pause, Pin, Play, RotateCcw, SquareTerminal, StickyNote, Timer, X } from 'lucide-react';
 import { StopwatchHero } from './StopwatchHero';
 import { CompactPill, type CompactKind } from './CompactPill';
 import { FocusPageRow, type HaloFocusState } from './FocusPageRow';
@@ -11,7 +11,17 @@ import { NowPageRow } from './NowPageRow';
 import { getAfkPrefs, isPassiveCategory } from '../../lib/afk';
 import { DictationIsland } from './DictationIsland';
 import './halo.css';
-import type { BreakPayload, CriticalPayload, DictationPayload, NowPayload, StopwatchPayload } from '../../shared/halo/types';
+import type { BreakPayload, CriticalPayload, DictationPayload, NoticePayload, NowPayload, StopwatchPayload } from '../../shared/halo/types';
+import {
+  breakDueNotice,
+  breakOverNotice,
+  captureAckNotice,
+  driftNotice,
+  recapNotice,
+  resumeNotice,
+  type NoticeEvent,
+  type TierBuckets,
+} from '../../shared/halo/noticeModel';
 import {
   HALO_DEFAULT_ORDER,
   HALO_DEFAULTS,
@@ -311,6 +321,8 @@ const BOARD1_PILL_KINDS = new Set<CompactKind>([
   'nextBlock',
   /* N2's running promise — designed pill: [Coffee][Back HH:MM][mono left]. */
   'break',
+  /* HALO_FIT ranks 6-8 — the transient notice; its own designed pill branch. */
+  'notice',
 ]);
 
 export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
@@ -366,6 +378,48 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
     currentApp: NowPayload | null;
     dictation: DictationPayload | null;
   } | null>(null);
+
+  /* ── HALO_FIT ranks 6-8 — THE TRANSIENT NOTICE ──────────────────────────────
+   * ONE event slot: the newest raised notice holds the pill for its spec'd hold
+   * (drift/resume 8s, recap 4s, ack 3s, break-over 4s) and then the queue hands
+   * the surface back. The activities memo below pushes it while `now < untilMs`,
+   * so the 1 Hz tick is both the clock and the eviction — no second timer.
+   * Notices REPLACE each other (same replaceGroup): the newest event is the most
+   * relevant one by construction, so no queue of pending toasts is kept. */
+  const [eventNotice, setEventNotice] = useState<{ payload: NoticePayload; untilMs: number } | null>(null);
+  const flashNotice = useCallback((n: NoticeEvent | null): void => {
+    if (!n) return;
+    setEventNotice({ payload: n.payload, untilMs: Date.now() + n.durationMs });
+  }, []);
+  /* The read side of the island's own writes — kept in step by setPrefs/onPrefs. */
+  const prefsRef = useRef<HaloPrefs>(prefs);
+  useEffect(() => { prefsRef.current = prefs; }, [prefs]);
+  /* The island's own prefs write (N5 resume note, N7 presenter). Same ordered
+   * pair the pill's double-click reset uses: persist the whole bag, then make
+   * main re-read (from MEMORY — `deps.prefs()` reads userPreferences, so the
+   * setPreference above has already updated it synchronously; the 400 ms disk
+   * flush lands behind it and nothing re-reads disk in between). */
+  const persistHaloPrefs = useCallback(async (patch: Partial<HaloPrefs>): Promise<void> => {
+    try {
+      const next = normalizeHaloPrefs({ ...prefsRef.current, ...patch });
+      prefsRef.current = next;
+      setPrefs(next);
+      await window.deskflowAPI?.setPreference?.(HALO_PREFS_KEY, next);
+      await (window as unknown as { haloBridge?: { applyPrefs?: () => Promise<unknown> } }).haloBridge?.applyPrefs?.();
+    } catch { /* a failed write must not break the island; the toggle stays honest locally */ }
+  }, []);
+  const presenter = prefs.presenter === true;
+  /* N7 — THE PRESENTER MASK. Every NAME slot renders "Hidden"; times and counts
+   * stay. Applied at the producer/prop choke points below, never at the tier or
+   * count fields. THE DOMAIN CONTRACT SURVIVES: `domain` is a three-state field
+   * (string = a known site / null = a browser with an unknown site / undefined =
+   * not a browser — "unknown !== absent"), so the mask hides a REAL domain and
+   * passes null/undefined through untouched; masking "not a browser" into a
+   * hidden-string would lie about what the window is. */
+  const maskNow = (p: NowPayload): NowPayload =>
+    presenter ? { ...p, app: 'Hidden', domain: p.domain ? 'Hidden' : p.domain } : p;
+  const maskText = (s: string | null | undefined): string | undefined =>
+    presenter ? 'Hidden' : (s ?? undefined);
 
   /* THE ONE STOPWATCH. The island previously ran its own interval, which is why its
    * numeral disagreed with the dashboard's. Now it subscribes to the same store and
@@ -439,6 +493,11 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
     void bridge?.quickNote?.(text)
       .then((r: { ok?: boolean; error?: string }) => {
         if (r?.ok) {
+          flashNotice(captureAckNotice(captureResume));
+          /* N5 — "Pick up here" ALSO saves the note as the resume note: one string in
+           * prefs, shown once at the next return, then cleared. */
+          if (captureResume) void persistHaloPrefs({ resumeNote: text });
+          setCaptureResume(false);
           setCaptureText('');
           closeCapture();
         } else {
@@ -447,6 +506,8 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
       })
       .catch(() => setCaptureError('Note not saved because the bridge failed. Retry.'));
   };
+  /* N5 — the "Pick up here" toggle, next to Save in the capture editor. */
+  const [captureResume, setCaptureResume] = useState(false);
   /* §12 error state. The producer below used to swallow BOTH a thrown call and an `ok:false`
    * reply into the same "no entry" outcome, so a dead database and an empty one were
    * indistinguishable in the UI — and a dead one looked like a healthy empty list.
@@ -1053,17 +1114,20 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
    * The hostname is not — see the Website branch below. */
 const inBrowser = currentApp.category === 'Browser';
 
+  /* N7 — presenter masks the LABEL here, once: PillSubject's tracking line and
+   * FocusPageRow's Tracking/Now blocks both read this target, so one masked memo
+   * covers every expanded name slot. The kind stays — "Hidden" needs no kind lie. */
   const trackedTarget: { kind: 'win' | 'web' | 'priv'; label: string } | undefined = useMemo(() => {
     if (!currentApp || currentApp.app === 'No app detected') return undefined;
-    if (currentApp.isPrivate) return { kind: 'priv', label: 'Private window' };
+    if (currentApp.isPrivate) return { kind: 'priv', label: presenter ? 'Hidden' : 'Private window' };
     /* HALO_STATES.html line 143: a BROWSER site shows its domain, a DESKTOP app shows its
      * name. The `!inBrowser` branch used to return `undefined`, which dropped the name for
      * every non-browser app — so the open island showed a bare "Stopwatch" with no target
      * while the pill next to it named the app. That is the "where is the app name" report:
      * not a missing producer, an inverted branch. */
-    if (inBrowser) return { kind: 'web', label: currentApp.domain ?? currentApp.app };
-    return { kind: 'win', label: currentApp.app };
-  }, [currentApp, inBrowser]);
+    const raw = inBrowser ? currentApp.domain ?? currentApp.app : currentApp.app;
+    return { kind: inBrowser ? 'web' : 'win', label: presenter ? 'Hidden' : raw };
+  }, [currentApp, inBrowser, presenter]);
 
   /* ──────────────────────────────────────────────────────────────────────────
    * THE SLOT MODEL, MOUNTED (composeIsland had zero importers before this)
@@ -1119,13 +1183,13 @@ const inBrowser = currentApp.category === 'Browser';
     if (producers.deadline?.isOverdue) {
       out.push(
         mk('critical', {
-          message: producers.deadline.title ?? 'A deadline is overdue',
+          message: maskText(producers.deadline.title ?? 'A deadline is overdue'),
           source: 'deadlines',
           ...(producers.deadline.dueAtMs != null ? { route: '/deadlines' } : {}),
         } satisfies CriticalPayload),
       );
     }
-    if (currentApp && currentApp.app !== 'No app detected') out.push(mk('now', currentApp));
+    if (currentApp && currentApp.app !== 'No app detected') out.push(mk('now', maskNow(currentApp)));
     /* The three site-aware compact kinds (HALO_STATES.html board 1). They existed in the
      * ActivityKind union and the CURATED map while NOTHING emitted them, so they were resolvable
      * and still unreachable — the pill could never show one. These are the producers.
@@ -1134,10 +1198,10 @@ const inBrowser = currentApp.category === 'Browser';
      * genuinely holds, so an absent reading produces no pill rather than a fabricated one. */
     const isPrivateWindow = currentApp?.isPrivate === true;
     const knownSite = !isPrivateWindow && currentApp?.domain ? currentApp.domain : null;
-    if (isPrivateWindow) out.push(mk('private', currentApp));
-    if (knownSite) out.push(mk('website', currentApp));
+    if (isPrivateWindow) out.push(mk('private', maskNow(currentApp)));
+    if (knownSite) out.push(mk('website', maskNow(currentApp)));
     if (knownSite && stopwatch && !swPayload.paused) {
-      out.push(mk('stopwatchSite', { ...currentApp, site: knownSite }));
+      out.push(mk('stopwatchSite', { ...maskNow(currentApp), site: knownSite }));
     }
     if (remote?.dictation && remote.dictation.state !== 'idle') {
       out.push(mk('dictation', remote.dictation, { persistent: false }));
@@ -1187,12 +1251,18 @@ const inBrowser = currentApp.category === 'Browser';
         }
       }
     if (producers.hud) out.push(mk('hud', producers.hud));
-    if (producers.deadline) out.push(mk('nextDeadline', producers.deadline));
+    if (producers.deadline) out.push(mk('nextDeadline', presenter ? { ...producers.deadline, title: 'Hidden' } : producers.deadline));
     /* `break` — N2's running promise. Live lane (LANE_OF.break, priorityForKind resolves
      * 700), emitted only while the window is genuinely in the future, so an expired or
      * ended break produces NO activity and the pill hands the clock back. */
     if (breakUntil != null && breakUntil > t) {
       out.push(mk('break', { untilMs: breakUntil } satisfies BreakPayload, { persistent: false }));
+    }
+    /* `notice` — ranks 6-8's transient voice. The event slot (flashNotice) holds one
+     * notice with an absolute expiry; the 1 Hz tick is both clock and eviction, so a
+     * notice whose window passed produces NO activity — same honesty rule as `break`. */
+    if (eventNotice && t < eventNotice.untilMs) {
+      out.push(mk('notice', eventNotice.payload satisfies NoticePayload, { persistent: false }));
     }
     /* `nextBlock` — HALO_FIT's rank-6 "next up". `life.schedule` ALREADY carries the
      * nearest recurring block with absolute epoch stamps and `isNow`, so this is pure
@@ -1207,7 +1277,7 @@ const inBrowser = currentApp.category === 'Browser';
           mk(
             'nextBlock',
             {
-              title: sched.title,
+              title: presenter ? 'Hidden' : sched.title,
               ...(sched.location != null ? { location: sched.location } : {}),
               startsAtMs: sched.startsAtMs,
               endsAtMs: sched.endsAtMs,
@@ -1219,7 +1289,7 @@ const inBrowser = currentApp.category === 'Browser';
       }
     }
     return out;
-  }, [swPayload, storeSnap, currentApp, remote?.dictation, producers, afkPrefs, life, breakUntil]);
+  }, [swPayload, storeSnap, currentApp, remote?.dictation, producers, afkPrefs, life, breakUntil, eventNotice, presenter]);
 
   /* User layout: which widgets are on, in what order, how many at once. `visibleOrder`
    * drops hidden kinds; the model's `maxVisible` then caps the roster.
@@ -1582,6 +1652,85 @@ const inBrowser = currentApp.category === 'Browser';
   useEffect(() => {
     idleRef.current = { lastInteraction: storeSnap.lastInteractionAtMs, idleMs };
   });
+
+  /* ══ SESSION ACTIVITY — one derivation, two readers ════════════════════════════════════
+   * Declared here (before the notice watches below, whose deps array reads it at
+   * render time — a `const` in TDZ there is the exact class of bug documented at the
+   * `hoverTriggered` comment) and read by both the session-complete block further
+   * down and the drift toast's silence rule. */
+  const sessionActive = !!focus?.ok && !!focus.active;
+
+  /* ── THE NOTICE WATCHES — HALO_FIT ranks 6-8, one 1 Hz pass ────────────────────
+   * Everything here is a decision noticeModel already made pure; this effect only
+   * feeds it the island's live readings and raises what comes back. All state that
+   * must survive between ticks lives in refs, so the effect can run on EVERY tick
+   * without resetting its own edges. */
+  const noticeRefs = useRef({
+    /** N2 — epoch ms of the last genuine rest (away-gap end, break start/end). */
+    lastRestAtMs: 0,
+    /** N2 — epoch ms the due nudge last fired (0 = never). */
+    lastBreakNudgeAtMs: 0,
+    /** N2 — the previous tick's break-liveness, for the "Break over" edge. */
+    breakWasLive: false,
+  });
+  /** N4 — the tier-streak start the drift toast was last raised for. */
+  const driftShownRef = useRef(0);
+  useEffect(() => {
+    const t = now;
+    const r = noticeRefs.current;
+    const live = breakUntil != null && breakUntil > t;
+
+    /* N2 — BREAK ENDED. The previous tick held a promise and this one does not:
+     * the rest happened, the due clock restarts, and (unless the user ended it
+     * early — an ended-early break sets breakUntil to null via onBreak with no
+     * past window, indistinguishable here from expiry, so "Break over" only
+     * speaks when the window expired by the clock rather than was cancelled) */
+    if (r.breakWasLive && !live) {
+      r.lastRestAtMs = t;
+      r.lastBreakNudgeAtMs = 0;
+      flashNotice(breakOverNotice(false));
+      /* N5 — a break's end is also a return moment for the resume note. */
+      const note = prefsRef.current.resumeNote;
+      if (note && note.trim()) {
+        flashNotice(resumeNotice(prefsRef.current.presenter ? 'Hidden' : note));
+        void persistHaloPrefs({ resumeNote: '' });
+      }
+    }
+    r.breakWasLive = live;
+    /* A STARTED break is rest in progress — the due clock jumps to the promise's
+     * end, so the stretch after the break counts from when the rest ENDS. */
+    if (live && breakUntil != null && r.lastRestAtMs < breakUntil) r.lastRestAtMs = breakUntil;
+
+    /* N4 — THE DRIFT TOAST. The tier-streak clock lives in tierSinceRef (the same
+     * reading that feeds `APP · DISTRACTING 4M`), so the pill and the Now page can
+     * never disagree about how long "distracting" has lasted. */
+    const sinceMs = tierSinceRef.current.sinceMs;
+    const d = driftNotice({
+      tier: liveTier,
+      streakMs: sinceMs > 0 ? Math.max(0, t - sinceMs) : 0,
+      sessionActive,
+      away: isAway,
+      shownForSinceMs: driftShownRef.current,
+      sinceMs,
+    });
+    if (d) {
+      driftShownRef.current = d.shownForSinceMs;
+      flashNotice(d.notice);
+    }
+
+    /* N2 — THE BREAK-DUE NUDGE. Fires once per 90 min of continuous activity. */
+    const b = breakDueNotice({
+      lastRestAtMs: r.lastRestAtMs,
+      lastNudgeAtMs: r.lastBreakNudgeAtMs,
+      breakLive: live,
+      away: isAway,
+    }, t);
+    if (b) {
+      r.lastBreakNudgeAtMs = b.lastNudgeAtMs;
+      flashNotice(b.notice);
+    }
+  }, [now, breakUntil, liveTier, sessionActive, isAway, flashNotice, persistHaloPrefs]);
+
   useEffect(() => {
     if (isAway) {
       awayRef.current = { lastInteraction: idleRef.current.lastInteraction, awayMs: idleRef.current.idleMs };
@@ -1592,8 +1741,51 @@ const inBrowser = currentApp.category === 'Browser';
     if (!prev || idleRef.current.lastInteraction <= prev.lastInteraction) return;
     setReturnedAfterMs(prev.awayMs);
     const t = window.setTimeout(() => setReturnedAfterMs(null), 6000);
-    return () => window.clearTimeout(t);
-  }, [isAway]);
+    /* N2 — the away gap WAS the rest: continuous activity restarts at the return. */
+    noticeRefs.current.lastRestAtMs = Date.now();
+    noticeRefs.current.lastBreakNudgeAtMs = 0;
+    /* N5 — "`Back after 12m` is FOLLOWED BY your own words for 8 s": the note waits
+     * out the return acknowledgement, then speaks once. Presenter mode masks the
+     * TEXT at speak-time (the stored note survives the toggle). One-shot: cleared. */
+    const note = prefsRef.current.resumeNote;
+    let tNote: number | undefined;
+    if (note && note.trim()) {
+      tNote = window.setTimeout(() => {
+        flashNotice(resumeNotice(prefsRef.current.presenter ? 'Hidden' : note));
+        void persistHaloPrefs({ resumeNote: '' });
+      }, 6000);
+    }
+    return () => { window.clearTimeout(t); if (tNote != null) window.clearTimeout(tNote); };
+  }, [isAway, flashNotice, persistHaloPrefs]);
+
+  /* N6 — THE RESET RECAP. The store's `resetCount` is the only honest signal that a
+   * block of work CLOSED; the buckets that describe the closed block are the ones
+   * cached from the tick BEFORE the bump (the bumping snapshot has already zeroed
+   * them). Everything else about the rule lives in recapNotice(). */
+  const recapRef = useRef<{ resetCount: number; prev: TierBuckets | null; booted: boolean }>({ resetCount: 0, prev: null, booted: false });
+  useEffect(() => {
+    const snap = storeSnap;
+    if (!snap) return;
+    const c = recapRef.current;
+    const buckets: TierBuckets | null =
+      Number.isFinite(snap.productiveMs) && Number.isFinite(snap.neutralMs) && Number.isFinite(snap.distractingMs)
+        ? { productiveMs: snap.productiveMs, neutralMs: snap.neutralMs, distractingMs: snap.distractingMs }
+        : null;
+    if (!c.booted) {
+      /* First snapshot after mount: seed the cache. A reset that happened before the
+       * island existed is not this island's news to announce. */
+      c.booted = true;
+      c.resetCount = snap.resetCount;
+      c.prev = buckets;
+      return;
+    }
+    if (snap.resetCount > c.resetCount) {
+      const n = recapNotice({ prevResetCount: c.resetCount, nextResetCount: snap.resetCount, prev: c.prev });
+      if (n) flashNotice(n);
+    }
+    c.resetCount = snap.resetCount;
+    c.prev = buckets;
+  }, [storeSnap, flashNotice]);
 
   const returnConsequence =
     afkPrefs.action === 'reset-stopwatch' ? 'timer reset'
@@ -1645,7 +1837,6 @@ const inBrowser = currentApp.category === 'Browser';
   /* ══ SESSION COMPLETE, AND THE PILL'S TIME-LEFT STROKE — HALO_RESULT §7.1 ═══════════════
    * The stroke exists ONLY for a bounded target: an active session with an `endsAt`. The plain
    * stopwatch and an open-ended session get no stroke, because a ring with no end is a lie. */
-  const sessionActive = !!focus?.ok && !!focus.active;
   /* THE POSITIVE HALF OF CZ'S FOCUS RULE — the island opens on NOW, but when a session
    * BECOMES active while the user sits on the Now page, Focus leads: the countdown is
    * then the most honest thing the face can show. The ref gates it to the false→true
@@ -2130,7 +2321,7 @@ const inBrowser = currentApp.category === 'Browser';
               returnedAfterMs={returnedAfterMs}
               returnConsequence={returnConsequence}
               completeMs={completeMs}
-              deadlineTitle={trackedDeadline?.title ?? null}
+              deadlineTitle={presenter ? 'Hidden' : trackedDeadline?.title ?? null}
               fBody={size.fBody}
               fallback={
                 <AnimatePresence mode="popLayout" initial={false}>
@@ -2145,7 +2336,7 @@ const inBrowser = currentApp.category === 'Browser';
                     <CompactPill
                       kind={pillKind}
                       stopwatch={swPayload}
-                      now={currentApp}
+                      now={maskNow(currentApp)}
                       fBody={size.fBody}
                       listening={producers.dictation?.state === 'recording'}
                       usageFraction={producers.ai?.usageFraction}
@@ -2156,7 +2347,7 @@ const inBrowser = currentApp.category === 'Browser';
                           ? formatDeadlineDue(producers.deadline.deltaMs)
                           : undefined
                       }
-                      externalName={producers.external?.name}
+                      externalName={presenter ? 'Hidden' : producers.external?.name}
                       blockTitle={pillKind === 'nextBlock' ? blockTitle : undefined}
                       blockIn={pillKind === 'nextBlock' ? blockIn : undefined}
                       breakBackAt={
@@ -2169,6 +2360,9 @@ const inBrowser = currentApp.category === 'Browser';
                           ? fmtPillCountdown(breakUntil - now)
                           : undefined
                       }
+                      notice={pillKind === 'notice' && composed.toast?.kind === 'notice'
+                        ? (composed.toast.payload as NoticePayload)
+                        : undefined}
                     />
                   </motion.span>
                 </AnimatePresence>
@@ -2252,7 +2446,7 @@ const inBrowser = currentApp.category === 'Browser';
             focus={focus}
             now={now}
             awayMs={awayMs}
-            deadlineTitle={trackedDeadline?.title ?? null}
+            deadlineTitle={presenter ? 'Hidden' : trackedDeadline?.title ?? null}
             completeMs={!sessionActive ? completeMs : null}
             onDismissComplete={() => setCompleteMs(null)}
             onEditFocus={() => bridge?.navigate?.('/activity?tab=focus')}
@@ -2360,7 +2554,7 @@ const inBrowser = currentApp.category === 'Browser';
          * screen. The AI block renders only when its producer delivered (NowPageRow's honesty
          * rule), and the whole thing is one fixed-height row like every other page. */}
         {expanded && tab === 'now' && (
-          <NowPageRow currentApp={currentApp} ai={producers.ai} tierWord={tierWord} tierMinutes={tierMinutes} />
+          <NowPageRow currentApp={maskNow(currentApp)} ai={producers.ai} tierWord={tierWord} tierMinutes={tierMinutes} />
         )}
 
         {/* ══ THE SCHEDULE PAGE — a compact LIFE → SCHEDULE view ══════════════════
@@ -2437,6 +2631,26 @@ const inBrowser = currentApp.category === 'Browser';
                 >
                   {CAPTURE_MAX - captureText.length}
                 </span>
+                {/* N5 — "Pick up here". A toggle, not a mode: the note it marks is the one
+                 * shown at the NEXT return (away or break end), then cleared. aria-pressed
+                 * carries the state; the pen glyph is not colour-only. */}
+                <button
+                  type="button"
+                  aria-pressed={captureResume}
+                  aria-label={captureResume ? 'Pick up here is on — this note shows at your next return' : 'Pick up here — show this note when you return'}
+                  title={captureResume ? 'Will show when you return, then clear' : 'Show this note when you return'}
+                  onClick={() => setCaptureResume((v) => !v)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6, height: 28,
+                    padding: '0 10px', border: '1px solid var(--halo-border)', borderRadius: 999,
+                    background: captureResume ? 'var(--halo-accent-dim)' : 'transparent',
+                    color: captureResume ? 'var(--halo-text)' : 'var(--halo-muted)',
+                    cursor: 'pointer', fontSize: 'var(--halo-t-value, 13px)', flexShrink: 0,
+                  }}
+                >
+                  <NotebookPen size={11} strokeWidth={2} aria-hidden="true" />
+                  Pick up here
+                </button>
                 <button
                   type="button"
                   onClick={saveCapture}
@@ -2530,6 +2744,26 @@ const inBrowser = currentApp.category === 'Browser';
                * words ("Tools, needs attention") ride the title/aria, never colour alone. */
               dots={{ tools: (producers.hud?.waiting ?? 0) > 0 }}
             />
+            {/* N7 — THE PRESENTER MASK TOGGLE. Manual by spec ("automatic screen-share
+             * detection is not reliable"), persisted in prefs so it survives a remount,
+             * and it animates nothing — "a mask must be still". aria-pressed carries the
+             * state; the EyeOff glyph is not colour-only. */}
+            <button
+              type="button"
+              aria-pressed={presenter}
+              aria-label={presenter ? 'Presenter mode on — names hidden' : 'Presenter mode — hide names'}
+              title={presenter ? 'Presenter mode is ON — names are hidden' : 'Presenter mode — hide names (screen share)'}
+              onClick={() => void persistHaloPrefs({ presenter: !presenter })}
+              style={{
+                height: 44, minWidth: 44, display: 'inline-flex', alignItems: 'center',
+                justifyContent: 'center', borderRadius: 8, cursor: 'pointer',
+                background: presenter ? 'var(--halo-bg-raised)' : 'transparent',
+                color: presenter ? 'var(--halo-text)' : 'var(--halo-muted)',
+                border: 'none',
+              }}
+            >
+              {presenter ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
+            </button>
             {/* the pin, again — see the legacy rail note above */}
             {prefs.showPin && (
               <button

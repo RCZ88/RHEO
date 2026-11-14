@@ -58,6 +58,9 @@ export const LANE_OF: Record<ActivityKind, Lane> = {
   external: 'resident',
   nextBlock: 'live',
   break: 'live',
+  /* HALO_FIT ranks 6-8 — every transient notice rides the toast lane: fully evictable,
+   * minimum-display floor, gone when its event expires. */
+  notice: 'toast',
 
   critical: 'toast',
   hud: 'resident',
@@ -90,6 +93,10 @@ export const VERDICT: Record<ActivityKind, 'promote' | 'keep' | 'reject'> = {
   pinnedActivity: 'promote',
   hud: 'promote',
   critical: 'promote',
+  /* One kind, five voices — every notice is a designed transient, not an envelope.
+   * (The header comment above says "zero new ActivityKinds" for the 2026-10-05 merge;
+   * `break` and `notice` are later HALO_FIT additions, each argued at its site.) */
+  notice: 'promote',
   aiUsage: 'promote',
 
   // kept as reserved carriers — envelope only, never a dedicated slot
@@ -145,6 +152,10 @@ export const DWELL = {
   criticalMs: 6000,
   hudMs: 900,
   recordingMs: 1000,
+  /** The transient notice floor (rank 6-8): the SHORTEST spec'd hold (ack 2s). Longer
+   * notices (drift/resume 8s, recap 4s) outlive the floor through their own expiry in
+   * the producer — the floor guarantees a notice is never a single-frame flash. */
+  noticeMs: 2000,
 } as const;
 
 export const ROTATION_FADE_MS = 160;
@@ -157,6 +168,8 @@ export function minimumDisplayMsFor(kind: ActivityKind): number {
       return DWELL.hudMs;
     case 'dictation':
       return DWELL.recordingMs;
+    case 'notice':
+      return DWELL.noticeMs;
     default:
       return DWELL.residentCarouselMs;
   }
@@ -679,6 +692,10 @@ export const SURFACES: CuratedSurface[] = [
   /* HALO_FIT rank 3 — the break promise. Live-state-only: it exists while the user is
    * on a break and vanishes with it. [Coffee][Back HH:MM][mono left] in the pill. */
   { kind: 'break', lane: 'live', icon: 'coffee', compactChars: 5, liveOnly: true, route: null },
+  /* HALO_FIT ranks 6-8 — the transient notice (drift / break due / break over /
+   * resume note / capture ack / reset recap). Toast-lane only: an event, not a
+   * state, so it can never be an ambient rail card. */
+  { kind: 'notice', lane: 'toast', icon: 'bell', compactChars: 16, liveOnly: true, route: null },
   { kind: 'afkGap', lane: 'live', icon: 'coffee', compactChars: 6, liveOnly: true, route: '/activity' },
   { kind: 'aiUsage', lane: 'resident', icon: 'sparkles', compactChars: 6, liveOnly: false, route: '/ai' },
   { kind: 'hud', lane: 'toast', icon: 'terminal', compactChars: 7, liveOnly: false, route: '/penguin-console' },

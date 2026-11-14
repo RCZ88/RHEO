@@ -278,6 +278,21 @@ export interface HaloPrefs {
    */
   showPin: boolean;
   /**
+   * N7 — PRESENTER MODE. When true, every NAME slot in the island (app, site,
+   * deadline, block, external session, note text) renders the word "Hidden";
+   * times and counts stay. An always-on-top window is exactly what leaks in a
+   * screen share, and automatic share detection is not reliable, so this is
+   * manual: a rail toggle. "A mask must be still" — the mask animates nothing.
+   * Default-off.
+   */
+  presenter: boolean;
+  /**
+   * N5 — the resume note. ONE string, saved with the capture editor's "Pick up
+   * here" toggle; shown once at the next away-return or break end, then cleared.
+   * A single value in prefs is the whole data model — no table (RESULT.md N5).
+   */
+  resumeNote: string;
+  /**
    * How much of the window the OS lets the mouse reach while the island is EXPANDED.
    *
    * 'surface' (default) — the click region is shaped to the painted island alone, so the
@@ -443,6 +458,8 @@ export const HALO_DEFAULTS: HaloPrefs = {
     liveliness: 'full',
   },
   showPin: true,
+  presenter: false,
+  resumeNote: '',
   clickShield: 'surface',
   compactStyle: 'auto',
   autoShowActive: true,
@@ -738,6 +755,8 @@ export function normalizeHaloPrefs(raw: unknown): HaloPrefs {
     trigger: normalizeHaloTrigger(r.trigger),
     motion: normalizeHaloMotion(r.motion),
     showPin: typeof r.showPin === 'boolean' ? r.showPin : HALO_DEFAULTS.showPin,
+    presenter: typeof r.presenter === 'boolean' ? r.presenter : HALO_DEFAULTS.presenter,
+    resumeNote: typeof r.resumeNote === 'string' ? r.resumeNote : HALO_DEFAULTS.resumeNote,
     clickShield: pickEnum(r.clickShield, HALO_CLICK_SHIELDS, HALO_DEFAULTS.clickShield),
     compactStyle: pickEnum(r.compactStyle, HALO_COMPACT_STYLES, HALO_DEFAULTS.compactStyle),
     autoShowActive: typeof r.autoShowActive === 'boolean' ? r.autoShowActive : HALO_DEFAULTS.autoShowActive,

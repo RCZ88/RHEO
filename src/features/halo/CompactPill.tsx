@@ -1,6 +1,6 @@
-import { AppWindow, Bot, CalendarClock, CalendarDays, Coffee, Dumbbell, Globe, Lock, Mic, SquareTerminal, TriangleAlert } from 'lucide-react';
+import { AppWindow, Bot, CalendarClock, CalendarDays, Check, Coffee, Dumbbell, Globe, Lock, Mic, NotebookPen, SquareTerminal, TrendingDown, TriangleAlert } from 'lucide-react';
 import type { CSSProperties, ReactElement } from 'react';
-import type { NowPayload, StopwatchPayload } from '../../shared/halo/types';
+import type { NoticePayload, NowPayload, StopwatchPayload } from '../../shared/halo/types';
 
 /**
  * CompactPill — the body of the COLLAPSED island.
@@ -57,6 +57,8 @@ export interface CompactPillProps {
   breakBackAt?: string;
   /** `break` only — the mono countdown, e.g. "09:41". */
   breakLeft?: string;
+  /** `notice` only — the transient payload (ranks 6-8), rendered as-is. */
+  notice?: NoticePayload;
 }
 
 /** Board 1's ten kinds, in the file's own order, plus the two HALO_FIT-promoted kinds
@@ -75,7 +77,9 @@ export type CompactKind =
   /* HALO_FIT promoted kinds — layouts argued in the two branches below. */
   | 'external'
   | 'nextBlock'
-  | 'break';
+  | 'break'
+  /* HALO_FIT ranks 6-8 — the transient notice; its own branch below. */
+  | 'notice';
 
 const DIVIDER = (h: number): CSSProperties => ({
   width: 1,
@@ -102,6 +106,7 @@ export function CompactPill(props: CompactPillProps): ReactElement {
     blockIn,
     breakBackAt,
     breakLeft,
+    notice,
   } = props;
 
   /* `width: 100%` + a bounded parent is what makes the name's flex-shrink meaningful: the row
@@ -371,6 +376,30 @@ export function CompactPill(props: CompactPillProps): ReactElement {
         {icon(Coffee)}
         {name(breakBackAt || 'On break', 'var(--halo-muted)')}
         {breakLeft && mut(breakLeft, true)}
+      </span>
+    );
+  }
+
+  /* HALO_FIT ranks 6-8 — `notice`: [icon][state word / note][mono numeral?]. One layout
+   * for all five voices. The tone picks the icon's colour — a measurement of severity,
+   * not decoration: warn is the drift's tier word (never colour alone, the label says
+   * "Drifting"), ok the recap/ack check, dim the gentle reminders. No mono numeral
+   * means the notice has nothing to measure; inventing one would be a lie. */
+  if (kind === 'notice' && notice) {
+    const Icon =
+      notice.icon === 'trend' ? TrendingDown
+        : notice.icon === 'coffee' ? Coffee
+          : notice.icon === 'note' ? NotebookPen
+            : Check;
+    const toneColor =
+      notice.tone === 'warn' ? 'var(--tier-distracting, var(--halo-text))'
+        : notice.tone === 'ok' ? 'var(--halo-accent)'
+          : 'var(--halo-muted)';
+    return (
+      <span style={row}>
+        {icon(Icon, toneColor)}
+        {name(notice.label, notice.tone === 'ok' ? 'var(--halo-text)' : 'var(--halo-muted)')}
+        {notice.mono && mut(notice.mono, true)}
       </span>
     );
   }
