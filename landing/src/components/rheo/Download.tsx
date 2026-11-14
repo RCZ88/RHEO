@@ -130,7 +130,7 @@ function RendererGlyph({ rm }: { rm: boolean }) {
       <line x1={38} y1={21} x2={44} y2={21} stroke="#52525b" strokeWidth={GS} />
       {/* idle life: the content rows breathe — activity is flowing (rm-gated) */}
       <motion.g
-        animate={rm ? undefined : { opacity: [1, 0.5, 1] }}
+        animate={rm ? undefined : { opacity: [1, 0.35, 1] }}
         transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
       >
         <line x1={52} y1={16} x2={94} y2={16} stroke="#52525b" strokeWidth={GS} />
@@ -158,7 +158,7 @@ function MainGlyph({ rm }: { rm: boolean }) {
       {/* idle life: the tick ring turns — the main process is always recording (rm-gated) */}
       <motion.g
         animate={rm ? undefined : { rotate: 360 }}
-        transition={{ duration: 24, repeat: Infinity, ease: "linear" }}
+        transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
         style={{ transformOrigin: "66px 18px" }}
       >
         {ticks.map((t, i) => (
@@ -198,7 +198,7 @@ function SqliteGlyph({ rm }: { rm: boolean }) {
         return p.label === "WAL" ? (
           <motion.g
             key={p.label}
-            animate={rm ? undefined : { opacity: [1, 0.65, 1] }}
+            animate={rm ? undefined : { opacity: [1, 0.55, 1], y: [0, -1.5, 0] }}
             transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
           >
             {page}
@@ -221,7 +221,7 @@ function DiskGlyph({ rm }: { rm: boolean }) {
       {/* idle life: the platter turns — its radius mark shows the spin (rm-gated) */}
       <motion.line
         animate={rm ? undefined : { rotate: 360 }}
-        transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+        transition={{ duration: 2.4, repeat: Infinity, ease: "linear" }}
         style={{ transformOrigin: "54px 18px" }}
         x1={55.4} y1={16.6} x2={59.7} y2={12.4} stroke="#52525b" strokeWidth={GS}
       />
@@ -274,7 +274,7 @@ function LayersStack({
 
   const someSelected = selected !== null;
   const extra = 2 + 12 * sep; // gap per pair: rest 4.16px → open 14px
-  const REST_EXTRA = 2 + 12 * REST_SEP; // the rest gap the burst starts from
+  const PLATE_PITCH = 62; // rest-slot pitch: 56px plate + 6px gap (burst spacing)
   const EASE = "cubic-bezier(0.16,1,0.3,1)";
   const tSel = rm ? undefined : `transform 200ms ${EASE}`;
   const tOp = rm ? undefined : `opacity 200ms ${EASE}`;
@@ -287,9 +287,9 @@ function LayersStack({
       {!rm && (
         <motion.div
           aria-hidden="true"
-          initial={{ opacity: 0.45, scale: 0.25 }}
-          animate={{ opacity: 0, scale: 1.9 }}
-          transition={{ duration: 0.7, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
+          initial={{ opacity: 0.8, scale: 0.25 }}
+          animate={{ opacity: 0, scale: 2.6 }}
+          transition={{ duration: 0.85, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
           style={{
             position: "absolute",
             top: 142, // center of the fan group (284px tall, centered)
@@ -299,7 +299,7 @@ function LayersStack({
             marginLeft: -110,
             marginTop: -110,
             borderRadius: 999,
-            border: "1px solid rgba(255,255,255,0.5)",
+            border: "1px solid rgba(255,255,255,0.85)",
             pointerEvents: "none",
           }}
         />
@@ -323,13 +323,14 @@ function LayersStack({
           return (
             <motion.div
               key={id}
-              // the burst: plates fly OUT from a tight center stack to their
-              // rest slots (the vault was holding them). The inner fan
-              // transform is untouched — this wrapper only carries the
-              // entrance. Staggered top→bottom; rm renders static (initial=false).
-              initial={rm ? false : { opacity: 0, scale: 0.86, y: (1.5 - i) * REST_EXTRA }}
+              // the burst: each plate starts at the MIRRORED slot (±93/±31px
+              // travel) at scale .55 — the stack expands outward from its
+              // center, plates crossing through it, then landing on their
+              // rest slots. The inner fan transform is untouched; this wrapper
+              // only carries the entrance. Staggered top→bottom; rm static.
+              initial={rm ? false : { opacity: 0, scale: 0.55, y: -(i - 1.5) * PLATE_PITCH }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ duration: 0.56, delay: 0.1 + i * 0.07, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 0.72, delay: 0.1 + i * 0.07, ease: [0.16, 1, 0.3, 1] }}
             >
               <div
                 style={{
@@ -671,7 +672,24 @@ function vaultDispatch(
 
 // V2: cubic ease-out — the sweep arrives at raw 41 with w≈0 and the settle
 // spring snaps ONto 40. Never creep through 40.
-const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
+// ── Lap profile (PROBLEMS #154 fix, CZ-approved 2026-11-14) ─────────────
+// The rev-3 cubic ease-out peaked ~261 u/s — over hairline's ±150 u/s
+// spin.w clamp — so the arc under-integrated ~20 units and the dial stalled
+// on the detent BELOW 40 (settles 20/10, vault never opens). New profile:
+// constant-rate bulk for LAP_BULK of the lap, then a linear decel to zero.
+// Integral is exactly 1 by construction of C; peak dial velocity
+// S·C/T ≈ 101 u/s (S=111, T=1.25s) stays under the clamp, so the full arc
+// integrates and the tail arrives at the detent with w≈0 — the settle spring
+// snaps ONto 40. Animated laps add LAP_OVERSHOOT_UNITS to compensate the
+// lerp-startup lag (~3–4 units, measured); rm keeps the exact rev-3 arc.
+const LAP_BULK = 0.75;
+const LAP_OVERSHOOT_UNITS = 3;
+const LAP_RATE_C = 1 / (0.5 + 0.5 * LAP_BULK);
+function lapProgress(t: number): number {
+  if (t <= LAP_BULK) return LAP_RATE_C * t;
+  const d = (t - LAP_BULK) / (1 - LAP_BULK); // 0..1 across the decel
+  return LAP_RATE_C * LAP_BULK + LAP_RATE_C * (1 - LAP_BULK) * (d - (d * d) / 2);
+}
 
 /**
  * Probe the dial's resting value: ONE hover move (a single move after a leave
@@ -760,11 +778,19 @@ async function dialLap(
   // Δ to travel; +100 when short so the gesture is always a full turn (V1)
   let delta = (OPEN_DETENT - a0 + 100) % 100;
   if (delta < 60) delta += 100;
-  const sweepDeg = (delta + 1) * DEG_PER_UNIT; // +1 unit: settle snaps ONto 40 (V2)
+  // Lap profile (PROBLEMS #154): the rev-3 ease-out peaked ~261 u/s — over
+  // hairline's ±150 u/s spin clamp — so the arc under-integrated ~20 units and
+  // the dial stalled short of detent 40. Animated laps bulk-travel
+  // +LAP_OVERSHOOT_UNITS beyond target (compensating the measured lerp-startup
+  // lag, ~3–4u at ~100 u/s) under the new constant-rate profile, whose worst
+  // peak S·C/T ≈ 149 u/s stays under the clamp; rm keeps the exact rev-3 arc
+  // (synchronous dispatch has no startup deficit).
+  const sweepUnits = delta + 1 + (rm ? 0 : LAP_OVERSHOOT_UNITS);
+  const sweepDeg = sweepUnits * DEG_PER_UNIT; // +1 unit: settle snaps ONto 40 (V2)
   const phiEnd = VAULT_PHI0 - sweepDeg; // dial increases as pointer angle decreases
 
   const dispatchSample = (i: number, t: number) => {
-    const phi = VAULT_PHI0 - sweepDeg * easeOutCubic(t);
+    const phi = VAULT_PHI0 - sweepDeg * lapProgress(t);
     const [sx, sy] = facePoint(phi);
     vaultDispatch(
       stage,
@@ -839,9 +865,9 @@ function layersSweep(reverse = false): Pt[] {
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// §7b runtime stamp — proves the v9.0 bundle is actually served (module scope:
+// §7b runtime stamp — proves the v9.1 bundle is actually served (module scope:
 // logs once per load, not per render).
-console.log("%c[FigureInstrument] v9.0 loaded", "color: #fbbf24; font-weight: bold");
+console.log("%c[FigureInstrument] v9.1 loaded", "color: #fbbf24; font-weight: bold");
 
 function FigureInstrument({ rm }: { rm: boolean }) {
   const [mode, setMode] = useState<"vault" | "layers">("vault");
@@ -1047,16 +1073,17 @@ function FigureInstrument({ rm }: { rm: boolean }) {
               animate={{ opacity: 0.9, y: 0 }}
               exit={
                 // the vault leaves the way it should physically: it RECOILS
-                // (releases pressure, scale 1.045) then IMPLODES away (scale
-                // .84, sinks) while the plates burst out of it on the incoming
-                // side. Enter/exit share one path (apple-design §7). Keyframes:
-                // [rest, recoil, gone]. The stack's own exit stays the old fade.
+                // (releases pressure, scale 1.06) then IMPLODES away (scale
+                // .6, sinks 12px) while the plates burst out of it on the
+                // incoming side. Enter/exit share one path (apple-design §7).
+                // Keyframes: [rest, recoil, gone]. The stack's own exit stays
+                // the old fade.
                 isVault
                   ? {
                       opacity: [0.9, 0.9, 0],
-                      scale: [1, 1.045, 0.84],
-                      y: [0, -2, -6],
-                      transition: { duration: rm ? 0 : 0.36, times: [0, 0.3, 1], ease: [0.16, 1, 0.3, 1] },
+                      scale: [1, 1.06, 0.6],
+                      y: [0, -3, -12],
+                      transition: { duration: rm ? 0 : 0.42, times: [0, 0.3, 1], ease: [0.16, 1, 0.3, 1] },
                     }
                   : { opacity: 0, y: -8, transition: { duration: rm ? 0 : 0.32, ease: [0.16, 1, 0.3, 1] } }
               }
