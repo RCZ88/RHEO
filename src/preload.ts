@@ -361,7 +361,11 @@ contextBridge.exposeInMainWorld('deskflowAPI', {
   aiContextStats: () => ipcRenderer.invoke('ai-context:stats'),
   aiContextDelete: (id: number) => ipcRenderer.invoke('ai-context:delete', id),
   aiContextClear: (provider?: string) => ipcRenderer.invoke('ai-context:clear', provider),
-  onAiContextCaptured: (cb: (data: { count: number }) => void) => { ipcRenderer.on('ai-context-captured', (_e, data) => cb(data)); },
+  onAiContextCaptured: (cb: (data: { count: number }) => void) => {
+    const h = (_e: unknown, data: { count: number }) => cb(data);
+    ipcRenderer.on('ai-context-captured', h as never);
+    return () => { ipcRenderer.removeListener('ai-context-captured', h as never); };
+  },
   aiContextGetBrainLinks: (captureId: number) => ipcRenderer.invoke('ai-context:get-brain-links', captureId),
   aiContextTopics: () => ipcRenderer.invoke('ai-context:topics'),
   aiContextUpdate: (id: number, metadata: any) => ipcRenderer.invoke('ai-context:update', id, metadata),

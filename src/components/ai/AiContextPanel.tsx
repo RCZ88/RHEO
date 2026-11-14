@@ -20,6 +20,7 @@ export function AiContextPanel({ open }: { open: boolean }) {
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [brainLinks, setBrainLinks] = useState<Record<number, { episodes: number; entities: number; facts: number; signals: number }>>({});
   const [editingId, setEditingId] = useState<number | null>(null);
   const [sendMenuId, setSendMenuId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<any>({});
@@ -48,7 +49,24 @@ export function AiContextPanel({ open }: { open: boolean }) {
   }, [fetchData]);
 
   const toggleExpand = (id: number) => {
-    setExpandedId(expandedId === id ? null : id);
+    const next = expandedId === id ? null : id;
+    setExpandedId(next);
+    // Brain links: the capture → ContextBrain episodes written at main.ts:23474,
+    // read back here so the user sees what each chat taught the brain. The
+    // preload bridge existed unused — this is its first consumer.
+    if (next !== null && brainLinks[next] === undefined) {
+      // `as any` — the preload bridge exists (preload.ts:366) but the d.ts was
+      // never extended for it; guard + catch keep it honest at runtime.
+      (window as any).deskflowAPI?.aiContextGetBrainLinks?.(next).then((links: any) => {
+        if (!links) return;
+        setBrainLinks((m) => ({ ...m, [next]: {
+          episodes: links.episodes?.length ?? 0,
+          entities: links.entities?.length ?? 0,
+          facts: links.facts?.length ?? 0,
+          signals: links.signals?.length ?? 0,
+        } }));
+      }).catch(() => {});
+    }
     setEditingId(null);
   };
 
@@ -150,6 +168,14 @@ export function AiContextPanel({ open }: { open: boolean }) {
           </div>
           <div className="flex items-center gap-2 text-zinc-500 light:text-[var(--text-muted)]">
             <span className="text-xs">{cap.messages?.length || 0} msgs</span>
+            {isExpanded && brainLinks[cap.id] && (
+              <span
+                className="text-[9px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-300 border border-violet-500/20 light:text-[var(--text-secondary)]"
+                title="Context Brain links: episodes · entities · facts (from capture → brain write)"
+              >
+                brain {brainLinks[cap.id].episodes}ep · {brainLinks[cap.id].entities}ent · {brainLinks[cap.id].facts}f
+              </span>
+            )}
             {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </div>
         </div>

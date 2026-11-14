@@ -465,6 +465,39 @@ export function CreateLessonDialog({
   const [knowledgeMode, setKnowledgeMode] = useState<KnowledgeMode>('auto');
   const [lessonSize, setLessonSize] = useState<'compact' | 'standard' | 'comprehensive' | 'dynamic'>('dynamic');
   const [knowledgeContext, setKnowledgeContext] = useState('');
+  const [pullingChats, setPullingChats] = useState(false);
+  const [pullNote, setPullNote] = useState('');
+
+  // P1 of the AI-organizer revamp: the capture → brain loop already feeds
+  // ContextBrain episodes (main.ts:23474); this surfaces those captured
+  // external-AI conversations INTO the lesson prompt — via the editable
+  // knowledge field, never silent prompt-stuffing.
+  const pullFromAiChats = async () => {
+    if (pullingChats) return;
+    setPullingChats(true);
+    setPullNote('');
+    try {
+      const res = await api.aiContextList?.({ limit: 6 });
+      const caps: any[] = (res?.captures ?? []).filter((c: any) => (c.messages?.length ?? 0) > 0);
+      if (!caps.length) {
+        setPullNote('No captured AI chats yet — browse ChatGPT/Claude with the extension first.');
+        return;
+      }
+      const lines = caps.map((c: any) => {
+        const first = c.messages.find((m: any) => m.role && m.role !== 'assistant') ?? c.messages[0];
+        const excerpt = String(first?.content ?? '').replace(/\s+/g, ' ').slice(0, 220);
+        return `• [${c.provider}${c.nickname || c.title ? ` — ${c.nickname || c.title}` : ''}] ${excerpt}…`;
+      });
+      const block = `\n\n### Recent external AI conversations (captured by DeskFlow)\n${lines.join('\n')}`;
+      setKnowledgeContext((k: string) => (k ? k + block : block.trim()));
+      setPullNote(`Added ${caps.length} chat${caps.length === 1 ? '' : 's'} to your knowledge context.`);
+    } catch {
+      setPullNote('Could not read captures right now.');
+    } finally {
+      setPullingChats(false);
+      setTimeout(() => setPullNote(''), 3500);
+    }
+  };
   const [focusArea, setFocusArea] = useState('balanced');
   const [depthLevel, setDepthLevel] = useState('adaptive');
   const [lessonStyle, setLessonStyle] = useState('standard');
@@ -1132,6 +1165,17 @@ export function CreateLessonDialog({
                       placeholder={`Paste what you already know about this topic. Examples:\n\n• Notes from a previous lesson\n• Key concepts you've learned\n• Points you want the AI to focus on\n• Things you already understand (so it skips basics)`}
                       className="w-full px-3 py-2 rounded-xl bg-zinc-800/50 border border-zinc-700/50 text-zinc-200 text-xs leading-relaxed focus:outline-none focus:border-clay-500/40 focus:ring-2 focus:ring-clay-500/10 resize-y placeholder:text-zinc-600 transition-all duration-150 min-h-[80px]"
                     />
+                      <div className="flex items-center gap-2 mt-2">
+                        <button
+                          type="button"
+                          onClick={pullFromAiChats}
+                          disabled={pullingChats}
+                          className="px-2.5 py-1 rounded-lg border border-cyan-500/25 bg-cyan-500/10 text-cyan-300 text-[11px] font-medium hover:bg-cyan-500/15 hover:border-cyan-500/40 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {pullingChats ? 'Pulling…' : 'Pull from AI chats'}
+                        </button>
+                        {pullNote && <span className="text-[10px] text-zinc-500">{pullNote}</span>}
+                      </div>
                     {learnerContext && (
                       <div className="mt-2 p-2 rounded-lg bg-emerald-500/8 border border-emerald-500/15">
                         <p className="text-[10px] text-emerald-400/80 uppercase tracking-wider mb-1">Auto-retrieved learner context</p>

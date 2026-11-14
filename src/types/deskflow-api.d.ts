@@ -136,7 +136,7 @@ export interface DeskflowAPI {
   aiContextGroupCreate: (name: string, color?: string) => Promise<any>
   aiContextGroupRename: (id: number, name: string) => Promise<any>
   aiContextGroupDelete: (id: number) => Promise<any>
-
+  onAiContextCaptured: (cb: (data: { count: number }) => void) => () => void
   // ── Memory ──
   memoryGetHot: (limit?: number) => Promise<any>
   memoryGetByTier: (tier: string, limit?: number) => Promise<any>
@@ -180,6 +180,7 @@ export interface DeskflowAPI {
   // ── Stats / Dashboard ──
   getStats: () => Promise<any>
   getDailyStats: (period: string) => Promise<any>
+  getTodayTrackedSeconds: () => Promise<number>
   getDashboardData: (params: any) => Promise<any>
   getPageStats: (params: any) => Promise<any>
   getLogs: () => Promise<any>
