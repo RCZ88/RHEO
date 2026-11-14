@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>A · MERIDIAN — RHEO boot prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /* ── PROTOTYPE A · "MERIDIAN" ─────────────────────────────────────────
+     The day's line IS the loading bar. Boot draws the 24-hour meridian
+     from 00 toward the real current time; the "now" lamp is the hero.
+     Tokens mirror design/design.md (LAMINAR) dark theme:
+       field #09090b · hairline rgb(255,255,255/.08) · fg #fafafa
+       muted #a1a1aa · faint #71717a · signal (brand pink) #ec4899
+     Motion: L2 · expo easing only · no springs · loops are functional
+     (the now-lamp marks live time). Click the stage to replay. */
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body { height: 100%; }
+  body {
+    background: #050506;
+    display: grid;
+    place-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    color: #71717a;
+  }
+
+  .wrap { display: flex; flex-direction: column; gap: 14px; align-items: center; }
+
+  /* The 520×320 frameless splash window, as it ships */
+  .stage {
+    width: 520px; height: 320px;
+    position: relative;
+    overflow: hidden;
+    background: #09090b;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 300ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .stage.on { opacity: 1; }
+
+  /* ── wordmark ── */
+  .mark {
+    position: absolute;
+    left: 0; right: 0; top: 66px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    opacity: 0; transform: translateY(10px);
+    transition: opacity 520ms cubic-bezier(0.19,1,0.22,1), transform 520ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .mark.in { opacity: 1; transform: none; }
+  .wordmark {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 30px; font-weight: 600;
+    letter-spacing: -0.02em;             /* size-specific: negative tracking at display size */
+    line-height: 1; color: #fafafa;
+  }
+  .caption {
+    font-size: 9.5px; letter-spacing: 0.22em;
+    text-transform: uppercase; color: #71717a;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .caption::before, .caption::after {
+    content: ""; width: 14px; height: 1px; background: rgba(255,255,255,0.12);
+  }
+
+  /* ── the meridian ── */
+  .meridian {
+    position: absolute; left: 48px; right: 48px; top: 196px;
+    height: 44px;
+  }
+  .mline {
+    position: absolute; left: 0; right: 0; top: 14px; height: 1px;
+    background: rgba(255,255,255,0.10);
+  }
+  .mtick {
+    position: absolute; top: 11px;
+    width: 1px; height: 8px;
+    background: rgba(255,255,255,0.14);
+    opacity: 0; transform: translateY(5px);
+    transition: opacity 260ms cubic-bezier(0.19,1,0.22,1), transform 260ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .mtick.major { top: 7px; height: 15px; background: rgba(255,255,255,0.22); }
+  .mtick.lit { opacity: 1; transform: none; }
+
+  .mnum {
+    position: absolute; top: 27px;
+    transform: translateX(-50%);
+    font-size: 9px; letter-spacing: 0.06em;
+    color: #71717a; font-variant-numeric: tabular-nums;
+    opacity: 0;
+    transition: opacity 250ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .mnum.lit { opacity: 1; }
+
+  /* boot fill: draws 00 → the real "now" as milestones land */
+  .mfill {
+    position: absolute; left: 0; top: 13.5px; height: 2px; width: 0;
+    background: #ec4899;
+    border-radius: 1px;
+    box-shadow: 0 0 10px rgba(236,72,153,0.22);
+    transition: width 900ms cubic-bezier(0.19,1,0.22,1);
+  }
+
+  /* the now lamp — the hero. Position = real wall-clock time. */
+  .now {
+    position: absolute; top: 0;
+    transform: translateX(-50%);
+    opacity: 0; transform: translateX(-50%) scale(0.6);
+    transform-origin: bottom center;
+    transition: opacity 260ms cubic-bezier(0.19,1,0.22,1), transform 260ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .now.lit { opacity: 1; transform: translateX(-50%) scale(1); }
+  .now .stem {
+    display: block; width: 2px; height: 13px; margin: 0 auto;
+    background: #ec4899; border-radius: 1px;
+    box-shadow: 0 0 12px rgba(236,72,153,0.45);
+  }
+  .now .dot {
+    display: block; width: 5px; height: 5px; margin: 4px auto 0;
+    background: #ec4899; border-radius: 50%;
+    box-shadow: 0 0 10px rgba(236,72,153,0.35);
+  }
+  .now .t {
+    display: block; margin-top: 6px;
+    font-size: 9px; color: #ec4899; letter-spacing: 0.08em;
+    text-align: center; font-variant-numeric: tabular-nums;
+  }
+  /* functional loop: the lamp marks live time (recording-dot class) */
+  .stage.ready .now .dot { animation: breathe 2.4s cubic-bezier(0.19,1,0.22,1) infinite; }
+  @keyframes breathe { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+  /* ── status ── */
+  .status {
+    position: absolute; left: 48px; bottom: 26px;
+    font-size: 10px; letter-spacing: 0.08em; color: #a1a1aa;
+    opacity: 0; transform: translateY(4px);
+    transition: opacity 300ms cubic-bezier(0.19,1,0.22,1), transform 300ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .status.in { opacity: 1; transform: none; }
+  .status .s { display: inline-block; transition: opacity 220ms ease; }
+  .status .s.swap { opacity: 0; }
+  .status b { color: #ec4899; font-weight: 500; }
+
+  .pct {
+    position: absolute; right: 48px; bottom: 26px;
+    font-size: 10px; letter-spacing: 0.08em; color: #71717a;
+    font-variant-numeric: tabular-nums;
+    opacity: 0;
+    transition: opacity 300ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .pct.in { opacity: 1; }
+
+  /* caption under the stage (prototype chrome, not the design) */
+  .note { max-width: 520px; font-size: 10.5px; line-height: 1.65; text-align: center; color: #52525b; }
+  .note b { color: #a1a1aa; font-weight: 500; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stage, .mark, .mtick, .mnum, .now, .status, .pct {
+      transition: none !important; animation: none !important;
+    }
+    .mfill { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="stage" id="stage" title="click to replay">
+      <div class="mark" id="mark">
+        <div class="wordmark">RHEO</div>
+        <div class="caption">your day, measured</div>
+      </div>
+
+      <div class="meridian" id="meridian">
+        <div class="mline"></div>
+        <div class="mfill" id="fill"></div>
+        <div class="now" id="now">
+          <span class="stem"></span><span class="dot"></span><span class="t" id="nowt">now</span>
+        </div>
+      </div>
+
+      <div class="status" id="status"><span class="s" id="stext">opening the ledger</span></div>
+      <div class="pct" id="pct">0%</div>
+    </div>
+
+    <div class="note">
+      <b>A · MERIDIAN</b> — the 24-hour line is the instrument; the lamp sits at the real
+      wall-clock time and the fill draws 00 → now as boot milestones land. dark · brand pink ·
+      L2. milestones simulated (real build wires them to the existing IPC stages). click stage to replay.
+    </div>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+  var stage = document.getElementById('stage');
+  var meridian = document.getElementById('meridian');
+  var mark = document.getElementById('mark');
+  var fill = document.getElementById('fill');
+  var now = document.getElementById('now');
+  var nowT = document.getElementById('nowt');
+  var statusEl = document.getElementById('status');
+  var stext = document.getElementById('stext');
+  var pct = document.getElementById('pct');
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var HOURS = 24;
+  var PAD = 6;                     // % padding each side of the meridian track
+  var STAGES = [
+    'opening the ledger',
+    'restoring sessions',
+    'waking surfaces',
+    'ready — your day is being recorded'
+  ];
+  var MILESTONE_PCT = [22, 50, 78, 100];
+  var MILESTONE_MS = [900, 2000, 3100, 4300];
+
+  var timers = [];
+  function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
+  function clearAll() { timers.forEach(clearTimeout); timers = []; }
+
+  // real current time → position on the 24h line
+  function nowInfo() {
+    var d = new Date();
+    var h = d.getHours() + d.getMinutes() / 60;
+    var frac = h / 24;
+    return {
+      pos: PAD + frac * (100 - 2 * PAD),
+      label: ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2)
+    };
+  }
+
+  function buildMeridian() {
+    var info = nowInfo();
+    nowT.textContent = info.label;
+    now.style.left = info.pos + '%';
+    for (var i = 0; i <= HOURS; i++) {
+      var isMajor = i % 6 === 0;
+      var tick = document.createElement('div');
+      tick.className = 'mtick' + (isMajor ? ' major' : '');
+      tick.style.left = (PAD + (i / HOURS) * (100 - 2 * PAD)) + '%';
+      meridian.appendChild(tick);
+      if (isMajor) {
+        var n = document.createElement('div');
+        n.className = 'mnum';
+        n.style.left = (PAD + (i / HOURS) * (100 - 2 * PAD)) + '%';
+        n.textContent = ('0' + i).slice(-2);
+        meridian.appendChild(n);
+      }
+    }
+    return { ticks: [].slice.call(meridian.querySelectorAll('.mtick')),
+             nums: [].slice.call(meridian.querySelectorAll('.mnum')) };
+  }
+
+  function setProgress(p) {
+    var info = nowInfo();
+    fill.style.width = (PAD + (p / 100) * (info.pos - PAD)) + '%';
+    pct.textContent = Math.round(p) + '%';
+  }
+
+  function setStatus(text) {
+    stext.classList.add('swap');
+    setTimeout(function () {
+      stext.textContent = text;
+      stext.classList.remove('swap');
+    }, 220);
+  }
+
+  function run() {
+    clearAll();
+    stage.classList.remove('on', 'ready');
+    meridian.querySelectorAll('.mtick, .mnum').forEach(function (n) { n.remove(); });
+    fill.style.width = '0%';
+    pct.textContent = '0%';
+    now.classList.remove('lit');
+    mark.classList.remove('in');
+    statusEl.classList.remove('in');
+    pct.classList.remove('in');
+    stext.textContent = STAGES[0];
+    void stage.offsetWidth;
+
+    var m = buildMeridian();
+
+    if (reduced) {                 // static final state
+      stage.classList.add('on');
+      mark.classList.add('in');
+      m.ticks.forEach(function (t) { t.classList.add('lit'); });
+      m.nums.forEach(function (n) { n.classList.add('lit'); });
+      now.classList.add('lit');
+      statusEl.classList.add('in'); pct.classList.add('in');
+      setProgress(100); stext.textContent = STAGES[3];
+      stage.classList.add('ready');
+      return;
+    }
+
+    at(0, function () { stage.classList.add('on'); });
+    at(120, function () { mark.classList.add('in'); });
+
+    m.ticks.forEach(function (t, i) {
+      at(280 + i * 14, function () { t.classList.add('lit'); });
+    });
+    m.nums.forEach(function (n, i) {
+      at(560 + i * 60, function () { n.classList.add('lit'); });
+    });
+
+    at(760, function () { statusEl.classList.add('in'); pct.classList.add('in'); });
+
+    // milestones → honest progress toward "now"
+    MILESTONE_MS.forEach(function (t, i) {
+      at(t, function () {
+        setProgress(MILESTONE_PCT[i]);
+        setStatus(STAGES[i]);
+        if (i === 2) now.classList.add('lit');          // lamp ignites as surfaces wake
+        if (i === 3) stage.classList.add('ready');      // functional breathing begins
+      });
+    });
+  }
+
+  stage.addEventListener('click', run);
+  run();
+})();
+</script>
+</body>
+</html>

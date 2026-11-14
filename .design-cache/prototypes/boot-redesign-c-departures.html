@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>C · DEPARTURES — RHEO boot prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /* ── PROTOTYPE C · "DEPARTURES" ───────────────────────────────────────
+     The crew's board flips over. Split-flap RHEO (mechanically honest:
+     tiles flip FORWARD through the drum, never crossfade), a real-time
+     clock, 4 boot-stage rows, and a lattice field that waves once per
+     stage advance — waves are functional progress and STOP at ready.
+     Tokens mirror design/design.md (LAMINAR) dark:
+       field #09090b · fg #fafafa · muted #a1a1aa · faint #71717a
+       hairline rgba(255,255,255,.08) · signal (workspace cyan) #06b6d4
+     Type: JetBrains Mono only (dev-tool mood; 1 font ≤ 2 rule).
+     Motion: L2 · expo easing · no springs. Click stage to replay. */
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body { height: 100%; }
+  body {
+    background: #050506;
+    display: grid; place-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    color: #71717a;
+  }
+
+  .wrap { display: flex; flex-direction: column; gap: 14px; align-items: center; }
+
+  .stage {
+    width: 520px; height: 320px;
+    position: relative; overflow: hidden;
+    background: #09090b;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 300ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .stage.on { opacity: 1; }
+
+  /* ── lattice field (canvas, behind everything) ── */
+  #field { position: absolute; inset: 0; }
+
+  /* ── split-flap wordmark ── */
+  .flaps {
+    position: absolute; left: 36px; top: 42px;
+    display: flex; gap: 4px;
+    perspective: 160px;
+  }
+  .tile {
+    position: relative; width: 28px; height: 44px;
+    background: rgba(255,255,255,0.045);
+    border-radius: 4px;                                  /* 0.12em @34px */
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+  }
+  .half, .flap {
+    position: absolute; left: 0; width: 100%; height: 50%;
+    overflow: hidden; background: rgba(255,255,255,0.045);
+  }
+  .flap { display: none; }
+  .half.top, .flap.fTop { top: 0; border-radius: 4px 4px 0 0; }
+  .half.bot, .flap.fBot { bottom: 0; border-radius: 0 0 4px 4px; }
+  .half span, .flap span {
+    position: absolute; left: 0; width: 100%; height: 200%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px; font-weight: 500; line-height: 1; color: #fafafa;
+  }
+  .half.top span, .flap.fTop span { top: 0; }
+  .half.bot span, .flap.fBot span { bottom: 0; }
+  .flap.fTop {
+    transform-origin: center bottom; backface-visibility: hidden;
+    box-shadow: inset 0 -1px 0 rgba(0,0,0,0.55);
+  }
+  .flap.fBot {
+    transform-origin: center top; backface-visibility: hidden;
+    box-shadow: inset 0 1px 0 rgba(0,0,0,0.55);
+  }
+  /* the seam between halves */
+  .seam {
+    position: absolute; left: 0; right: 0; top: 50%; height: 1px;
+    background: rgba(0,0,0,0.55); z-index: 3;
+  }
+
+  /* ── clock (functional, real time) ── */
+  .clock {
+    position: absolute; right: 36px; top: 52px;
+    font-size: 11px; letter-spacing: 0.08em; color: #a1a1aa;
+    font-variant-numeric: tabular-nums;
+  }
+  .clock small {
+    display: block; margin-top: 4px; font-size: 8px; letter-spacing: 0.22em;
+    color: #52525b; text-align: right;
+  }
+
+  /* ── stage rows ── */
+  .rows { position: absolute; left: 36px; right: 36px; top: 132px; }
+  .row {
+    display: flex; align-items: center; gap: 12px; height: 27px;
+    font-size: 12px; color: #52525b;
+    opacity: 0; transform: translateY(5px);
+    transition: opacity 300ms cubic-bezier(0.19,1,0.22,1), transform 300ms cubic-bezier(0.19,1,0.22,1),
+                color 260ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .row.in { opacity: 1; transform: none; }
+  .row .dot {
+    width: 7px; height: 7px; border-radius: 50%; flex: none;
+    border: 1px solid rgba(255,255,255,0.18); background: transparent;
+    transition: background 260ms cubic-bezier(0.19,1,0.22,1),
+                border-color 260ms cubic-bezier(0.19,1,0.22,1),
+                box-shadow 260ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .row.active { color: #fafafa; }
+  .row.active .dot {
+    border-color: #06b6d4; background: rgba(6,182,212,0.35);
+    box-shadow: 0 0 8px rgba(6,182,212,0.50);
+  }
+  .row.done { color: #a1a1aa; }
+  .row.done .dot { border-color: #06b6d4; background: #06b6d4; box-shadow: none; }
+  .row .meta {
+    margin-left: auto; font-size: 10px; letter-spacing: 0.06em; color: #3f3f46;
+    opacity: 0; transition: opacity 260ms cubic-bezier(0.19,1,0.22,1);
+    font-variant-numeric: tabular-nums;
+  }
+  .row.active .meta, .row.done .meta { opacity: 1; }
+
+  /* ── bottom progress track ── */
+  .track {
+    position: absolute; left: 36px; right: 36px; bottom: 26px; height: 2px;
+    background: #070708; border-radius: 1px;
+    box-shadow: inset 0 1px 1px rgba(0,0,0,0.6);
+  }
+  .tfill {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+    background: #06b6d4; border-radius: 1px;
+    box-shadow: 0 0 10px rgba(6,182,212,0.35);
+    transition: width 900ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .pct {
+    position: absolute; right: 36px; bottom: 33px;
+    font-size: 9px; letter-spacing: 0.08em; color: #52525b;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .note { max-width: 520px; font-size: 10.5px; line-height: 1.65; text-align: center; color: #52525b; }
+  .note b { color: #a1a1aa; font-weight: 500; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stage, .row, .row .meta, .row .dot, .tfill { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="stage" id="stage" title="click to replay">
+      <canvas id="field" width="520" height="320"></canvas>
+
+      <div class="flaps" id="flaps"></div>
+
+      <div class="clock"><span id="clock">--:--:--</span><small>local</small></div>
+
+      <div class="rows" id="rows"></div>
+
+      <div class="pct" id="pct">0%</div>
+      <div class="track"><div class="tfill" id="tfill"></div></div>
+    </div>
+
+    <div class="note">
+      <b>C · DEPARTURES</b> — the crew's board flips over: split-flap RHEO lands letter by
+      letter, four boot-stage rows light up over a lattice field that waves once per stage
+      (and rests at ready), a real clock ticks top-right. dark · workspace cyan · mono only ·
+      L2. milestones simulated (real build wires them to the existing IPC stages). click stage to replay.
+    </div>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+  var stage = document.getElementById('stage');
+  var flapsEl = document.getElementById('flaps');
+  var rowsEl = document.getElementById('rows');
+  var clockEl = document.getElementById('clock');
+  var tfill = document.getElementById('tfill');
+  var pct = document.getElementById('pct');
+  var canvas = document.getElementById('field');
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var CHARSET = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:.-/&!?';
+  var FLIP = 56;                 // ms per flap fall (kokonutui split-flap)
+  var STAGGER = 40;              // ms between tiles
+  var WORD = 'RHEO';
+
+  var STAGES = [
+    'opening the ledger',
+    'restoring sessions',
+    'waking surfaces',
+    'ready — your day is being recorded'
+  ];
+  var META = ['0.5s', '1.1s', '1.1s', '1.1s'];
+  var MILESTONE_PCT = [22, 50, 78, 100];
+  var MILESTONE_MS = [800, 1900, 3000, 4100];   // ready ≈ 5s incl. last wave
+
+  var timers = [];
+  function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
+  function clearAll() { timers.forEach(clearTimeout); timers = []; }
+
+  /* ── split-flap ── */
+  var tiles = [];
+  function buildFlaps() {
+    flapsEl.innerHTML = '';
+    tiles = [];
+    for (var i = 0; i < WORD.length; i++) {
+      var tile = document.createElement('div');
+      tile.className = 'tile';
+      tile.innerHTML =
+        '<div class="half top"><span></span></div>' +
+        '<div class="half bot"><span></span></div>' +
+        '<div class="flap fTop"><span></span></div>' +
+        '<div class="flap fBot"><span></span></div>' +
+        '<div class="seam"></div>';
+      flapsEl.appendChild(tile);
+      tiles.push({
+        el: tile,
+        top: tile.querySelector('.half.top span'),
+        bot: tile.querySelector('.half.bot span'),
+        fTop: tile.querySelector('.flap.fTop'),
+        fBot: tile.querySelector('.flap.fBot'),
+        fTopS: tile.querySelector('.flap.fTop span'),
+        fBotS: tile.querySelector('.flap.fBot span'),
+        cur: ' '
+      });
+    }
+  }
+
+  function setStatic(t, ch) {
+    t.top.textContent = ch; t.bot.textContent = ch; t.cur = ch;
+  }
+
+  function showFlap(t) {
+    t.fTop.style.display = 'block';
+    t.fBot.style.display = 'block';
+  }
+  function hideFlaps() {
+    tiles.forEach(function (t) {
+      t.fTop.style.display = 'none';
+      t.fBot.style.display = 'none';
+    });
+  }
+
+  // one mechanically honest step: current flap falls, next flap rises
+  function stepFlip(t, done) {
+    var next = CHARSET[(CHARSET.indexOf(t.cur) + 1) % CHARSET.length];
+    t.fTopS.textContent = t.cur;
+    t.fBotS.textContent = next;
+    t.fTop.style.transition = 'none'; t.fTop.style.transform = 'rotateX(0deg)';
+    t.fBot.style.transition = 'none'; t.fBot.style.transform = 'rotateX(90deg)';
+    void t.fTop.offsetWidth;
+    t.fTop.style.transition = 'transform 28ms linear'; t.fTop.style.transform = 'rotateX(-90deg)';
+    t.fBot.style.transition = 'transform 28ms linear'; t.fBot.style.transform = 'rotateX(0deg)';
+    setTimeout(function () {
+      setStatic(t, next);
+      t.fTop.style.display = 'none'; t.fBot.style.display = 'none';
+      if (t.cur !== done.target && done.steps > 1) {
+        done.steps--;
+        setTimeout(function () { stepFlip(t, done); }, FLIP - 28);
+      }
+    }, 28);
+  }
+
+  function runFlaps() {
+    for (var i = 0; i < tiles.length; i++) {
+      (function (t, i) {
+        var target = WORD[i];
+        var idx = CHARSET.indexOf(target);
+        var start = Math.max(0, idx - (6 + (i * 2) % 5));   // start a few chars before target
+        setStatic(t, CHARSET[start]);
+        var steps = idx - start;
+        if (steps <= 0) { setStatic(t, target); return; }
+        at(i * STAGGER, function () {
+          showFlap(t);
+          stepFlip(t, { target: target, steps: steps });
+        });
+      })(tiles[i], i);
+    }
+  }
+
+  /* ── rows ── */
+  var rows = [];
+  function buildRows() {
+    rowsEl.innerHTML = '';
+    rows = STAGES.map(function (label, i) {
+      var r = document.createElement('div');
+      r.className = 'row';
+      r.innerHTML = '<span class="dot"></span><span class="label"></span><span class="meta"></span>';
+      r.querySelector('.label').textContent = label;
+      r.querySelector('.meta').textContent = META[i];
+      rowsEl.appendChild(r);
+      return r;
+    });
+  }
+
+  /* ── lattice field (canvas) ── */
+  var ctx = canvas.getContext('2d');
+  var COLS = 40, ROWS = 24, PITCH = 13, CELL = 6, OFF = 3.5;
+  var idle = [];
+  var waves = [];      // { t0 }
+  var rafId = 0, fieldRunning = false;
+
+  function buildIdle() {
+    idle = [];
+    for (var i = 0; i < COLS * ROWS; i++) idle.push(0.05 + Math.random() * 0.05);
+  }
+
+  function drawField(now) {
+    ctx.clearRect(0, 0, 520, 320);
+    var fronts = [];
+    for (var w = waves.length - 1; w >= 0; w--) {
+      var k = (now - waves[w].t0) / 864;                     // lattice wave cycle
+      if (k >= 1) { waves.splice(w, 1); continue; }
+      var e = 1 - Math.pow(1 - k, 3);                        // expo-out
+      fronts.push(-20 + e * 560);
+    }
+    if (waves.length === 0 && fieldRunning) { fieldRunning = false; }
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        var x = c * PITCH + OFF, y = r * PITCH + OFF;
+        var a = idle[r * COLS + c];
+        if (fronts.length) {
+          var glow = 0;
+          for (var f = 0; f < fronts.length; f++) {
+            var d = fronts[f] - x;
+            if (d > -16 && d < 260) {
+              glow += 0.55 * Math.exp(-Math.pow(d - 6, 2) / 648)   // leading crest
+                   + 0.20 * Math.exp(-Math.max(0, d) / 90);         // trailing decay
+            }
+          }
+          a = Math.min(0.85, a + glow);
+        }
+        if (a <= 0.02) continue;
+        ctx.globalAlpha = a;
+        if (a > 0.32) { ctx.shadowBlur = 8; ctx.shadowColor = 'rgba(6,182,212,0.8)'; }
+        else { ctx.shadowBlur = 0; }
+        ctx.fillStyle = '#06b6d4';
+        ctx.fillRect(x, y, CELL, CELL);
+      }
+    }
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+    if (fieldRunning || waves.length) rafId = requestAnimationFrame(drawField);
+  }
+
+  function wave() {
+    waves.push({ t0: performance.now() });
+    if (!fieldRunning) { fieldRunning = true; rafId = requestAnimationFrame(drawField); }
+  }
+
+  function drawIdleField() {
+    buildIdle();
+    waves = []; fieldRunning = false;
+    cancelAnimationFrame(rafId);
+    drawField(performance.now());
+  }
+
+  /* ── clock (functional — always runs, even reduced-motion) ── */
+  function pad(n) { return ('0' + n).slice(-2); }
+  function tickClock() {
+    var d = new Date();
+    clockEl.textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+  setInterval(tickClock, 1000);
+
+  function setProgress(p) {
+    tfill.style.width = p + '%';
+    pct.textContent = Math.round(p) + '%';
+  }
+
+  function finishStatic() {
+    tiles.forEach(function (t, i) { setStatic(t, WORD[i]); });
+    hideFlaps();
+    rows.forEach(function (r) { r.classList.add('in', 'done'); });
+    setProgress(100);
+    drawIdleField();
+  }
+
+  function run() {
+    clearAll();
+    stage.classList.remove('on');
+    buildFlaps(); buildRows(); drawIdleField();
+    setProgress(0);
+    void stage.offsetWidth;
+
+    if (reduced) { stage.classList.add('on'); finishStatic(); return; }
+
+    at(0, function () { stage.classList.add('on'); });
+    at(80, function () { runFlaps(); });
+
+    rows.forEach(function (r, i) {
+      at(240 + i * 70, function () { r.classList.add('in'); });
+    });
+
+    MILESTONE_MS.forEach(function (t, i) {
+      at(t, function () {
+        setProgress(MILESTONE_PCT[i]);
+        wave();                                             // one wave per stage advance
+        rows[i].classList.remove('active');
+        rows[i].classList.add('done');
+        if (i + 1 < rows.length) rows[i + 1].classList.add('active');
+      });
+    });
+
+    at(300, function () { rows[0].classList.add('active'); });
+  }
+
+  stage.addEventListener('click', run);
+
+  // start after the mono font is available so flap tiles measure true
+  var started = false;
+  function start() { if (started) return; started = true; tickClock(); run(); }
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(start);
+    setTimeout(start, 700);
+  } else { start(); }
+})();
+</script>
+</body>
+</html>

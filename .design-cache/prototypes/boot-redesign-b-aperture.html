@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>B · APERTURE / DAWN — RHEO boot prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /* ── PROTOTYPE B · "APERTURE / DAWN" ──────────────────────────────────
+     A precision instrument switching on — in Warm Paper LIGHT mode.
+     One dial charges (progress arc = truth), ring accents rotate while
+     working and STOP at ready (functional spinner, never decorative),
+     12 aperture ticks rotate open on entrance, ready = full circle +
+     one breath pulse. Foreshadows the Halo Island capsule.
+     Tokens mirror design/design.md (LAMINAR) Warm Paper light:
+       field #f5f2ec · ink #1c1917 · muted #57534e · faint #6f665e
+       hairline rgba(28,25,23,.10) · signal (teal) #0e7490
+     Motion: L2 · expo easing only · no springs. Click stage to replay. */
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body { height: 100%; }
+  body {
+    background: #0a0a0c;                 /* dark backdrop so the paper pops */
+    display: grid; place-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    color: #6f665e;
+  }
+
+  .wrap { display: flex; flex-direction: column; gap: 14px; align-items: center; }
+
+  .stage {
+    width: 520px; height: 320px;
+    position: relative; overflow: hidden;
+    background: #f5f2ec;
+    border: 1px solid rgba(28,25,23,0.10);
+    border-radius: 12px;
+    box-shadow: 0 24px 70px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.35);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 300ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .stage.on { opacity: 1; }
+
+  /* ── the dial ── */
+  .dial {
+    position: absolute; left: 50%; top: 50px; margin-left: -64px;
+    width: 128px; height: 128px;
+    opacity: 0; transform: scale(0.94);
+    transition: opacity 520ms cubic-bezier(0.19,1,0.22,1), transform 520ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .dial.in { opacity: 1; transform: none; }
+
+  .hairline {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 1px solid rgba(28,25,23,0.10);
+  }
+
+  .dial svg { position: absolute; inset: 0; }
+  .dial svg .track { stroke: rgba(28,25,23,0.07); }
+  #arc {
+    stroke: #0e7490; stroke-linecap: round;
+    transition: stroke-dashoffset 900ms cubic-bezier(0.19,1,0.22,1);
+  }
+
+  /* conic ring accents — the kokonutui loader recipe, currentColor teal.
+     FUNCTIONAL working indicator: rotate while working, stop + fade on ready. */
+  .ring {
+    position: absolute; left: 50%; top: 50%; border-radius: 50%;
+    background: conic-gradient(from 0deg,
+      transparent 0deg, currentColor 80deg,
+      color-mix(in srgb, currentColor 55%, transparent) 112deg, transparent 152deg);
+    -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px), #000 calc(100% - 0.5px), transparent 100%);
+            mask: radial-gradient(closest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px), #000 calc(100% - 0.5px), transparent 100%);
+    transform: translate(-50%,-50%);
+    animation: spin 3s linear infinite;
+  }
+  .ringA { width: 96px; height: 96px; color: rgba(14,116,144,0.50); }
+  .ringB { width: 78px; height: 78px; color: rgba(14,116,144,0.35); animation: spinRev 4.2s linear infinite; }
+  @keyframes spin    { to { transform: translate(-50%,-50%) rotate(360deg); } }
+  @keyframes spinRev { to { transform: translate(-50%,-50%) rotate(-360deg); } }
+  .stage.ready .ring {
+    opacity: 0; animation-play-state: paused;
+    transition: opacity 500ms cubic-bezier(0.19,1,0.22,1);
+  }
+
+  /* 12 aperture ticks — rotate open (−9° → 0) on entrance */
+  .tick {
+    position: absolute; left: 50%; top: 50%;
+    width: 1.5px; height: 4.5px; margin-left: -0.75px;
+    transform: rotate(var(--a)) translateY(-62.5px);
+  }
+  .tick i {
+    display: block; width: 100%; height: 100%;
+    background: rgba(28,25,23,0.30); border-radius: 1px;
+    transform: rotate(-9deg); opacity: 0;
+    transition: transform 700ms cubic-bezier(0.19,1,0.22,1), opacity 400ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .tick.open i { transform: rotate(0deg); opacity: 1; }
+
+  /* center: percent while charging → one teal dot locked in at ready */
+  .center { position: absolute; inset: 0; display: grid; place-items: center; }
+  .pctn {
+    font-size: 11px; font-weight: 500; color: #1c1917;
+    font-variant-numeric: tabular-nums; letter-spacing: 0.04em;
+    transition: opacity 300ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .cdot {
+    position: absolute; width: 6px; height: 6px; border-radius: 50%;
+    background: #0e7490; opacity: 0;
+    box-shadow: 0 0 0 4px rgba(14,116,144,0.12);
+    transition: opacity 300ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .stage.ready .pctn { opacity: 0; }
+  .stage.ready .cdot { opacity: 1; transition-delay: 200ms; }
+
+  /* ready = a single breath pulse (one-shot, not a loop) */
+  .stage.ready .dial { animation: pulse 700ms cubic-bezier(0.19,1,0.22,1) 1; }
+  @keyframes pulse { 0% { transform: scale(1); } 45% { transform: scale(1.02); } 100% { transform: scale(1); } }
+
+  /* ── wordmark ── */
+  .mark {
+    position: absolute; left: 0; right: 0; top: 208px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    opacity: 0; transform: translateY(8px);
+    transition: opacity 520ms cubic-bezier(0.19,1,0.22,1), transform 520ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .mark.in { opacity: 1; transform: none; }
+  .wordmark {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 24px; font-weight: 600; letter-spacing: -0.01em;
+    line-height: 1; color: #1c1917;
+  }
+  .caption {
+    font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase;
+    color: #6f665e;
+  }
+
+  /* ── status ── */
+  .status {
+    position: absolute; left: 0; right: 0; bottom: 26px; text-align: center;
+    font-size: 10.5px; letter-spacing: 0.06em; color: #6f665e;
+    opacity: 0;
+    transition: opacity 300ms cubic-bezier(0.19,1,0.22,1);
+  }
+  .status.in { opacity: 1; }
+  .status .s { display: inline-block; transition: opacity 220ms ease; }
+  .status .s.swap { opacity: 0; }
+  .status b { color: #0e7490; font-weight: 500; }
+
+  .note { max-width: 520px; font-size: 10.5px; line-height: 1.65; text-align: center; color: #8b8b93; }
+  .note b { color: #d4d4d8; font-weight: 500; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stage, .dial, .tick i, .mark, .status, .pctn, .cdot { transition: none !important; animation: none !important; }
+    #arc { transition: none; }
+    .ring { display: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="stage" id="stage" title="click to replay">
+      <div class="dial" id="dial">
+        <div class="hairline"></div>
+        <div class="ring ringA"></div>
+        <div class="ring ringB"></div>
+        <svg viewBox="0 0 128 128" width="128" height="128">
+          <circle class="track" cx="64" cy="64" r="56" fill="none" stroke-width="2.5"/>
+          <circle id="arc" cx="64" cy="64" r="56" fill="none" stroke-width="2.5"
+                  transform="rotate(-90 64 64)" stroke-dasharray="351.86" stroke-dashoffset="351.86"/>
+        </svg>
+        <div class="ticks" id="ticks"></div>
+        <div class="center">
+          <span class="pctn" id="pctn">0</span>
+          <span class="cdot" id="cdot"></span>
+        </div>
+      </div>
+
+      <div class="mark" id="mark">
+        <div class="wordmark">RHEO</div>
+        <div class="caption">your day, measured</div>
+      </div>
+
+      <div class="status" id="status"><span class="s" id="stext">opening the ledger</span></div>
+    </div>
+
+    <div class="note">
+      <b>B · APERTURE / DAWN</b> — a precision instrument switching on, in Warm Paper light.
+      the arc is the truth (0 → 100), the thin rings are garnish that stop the moment boot
+      completes, and the 12 aperture ticks rotate open as the instrument wakes. light · teal ·
+      L2. milestones simulated (real build wires them to the existing IPC stages). click stage to replay.
+    </div>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+  var stage = document.getElementById('stage');
+  var dial = document.getElementById('dial');
+  var ticks = document.getElementById('ticks');
+  var arc = document.getElementById('arc');
+  var pctn = document.getElementById('pctn');
+  var mark = document.getElementById('mark');
+  var statusEl = document.getElementById('status');
+  var stext = document.getElementById('stext');
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var C = 2 * Math.PI * 56;               // 351.86 — arc circumference
+  var STAGES = [
+    'opening the ledger',
+    'restoring sessions',
+    'waking surfaces',
+    'ready — your day is being recorded'
+  ];
+  var MILESTONE_PCT = [22, 50, 78, 100];
+  var MILESTONE_MS = [900, 2000, 3100, 4300];
+
+  var timers = [], raf = 0, shownPct = 0;
+  function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
+  function clearAll() { timers.forEach(clearTimeout); timers = []; if (raf) cancelAnimationFrame(raf); }
+
+  function buildTicks() {
+    ticks.innerHTML = '';
+    for (var i = 0; i < 12; i++) {
+      var t = document.createElement('div');
+      t.className = 'tick';
+      t.style.setProperty('--a', (i * 30) + 'deg');
+      t.appendChild(document.createElement('i'));
+      ticks.appendChild(t);
+    }
+    return [].slice.call(ticks.querySelectorAll('.tick'));
+  }
+
+  function setProgress(p) {
+    arc.style.strokeDashoffset = (C * (1 - p / 100)).toFixed(2);
+  }
+
+  // smooth instrument counter between milestones
+  function tweenPct(to) {
+    if (raf) cancelAnimationFrame(raf);
+    var from = shownPct, t0 = performance.now(), dur = 900;
+    (function f(now) {
+      var k = Math.min(1, (now - t0) / dur);
+      k = 1 - Math.pow(1 - k, 3);
+      shownPct = from + (to - from) * k;
+      pctn.textContent = Math.round(shownPct);
+      if (k < 1) raf = requestAnimationFrame(f);
+    })(t0);
+  }
+
+  function setStatus(text) {
+    stext.classList.add('swap');
+    setTimeout(function () {
+      stext.textContent = text;
+      stext.classList.remove('swap');
+    }, 220);
+  }
+
+  function finishStatic() {           // shared final state
+    setProgress(100); shownPct = 100; pctn.textContent = '100';
+    stext.textContent = STAGES[3];
+    stage.classList.add('on', 'ready');
+    dial.classList.add('in'); mark.classList.add('in'); statusEl.classList.add('in');
+    ticks.querySelectorAll('.tick').forEach(function (t) { t.classList.add('open'); });
+  }
+  function run() {
+    clearAll();
+    stage.classList.remove('on', 'ready');
+    dial.classList.remove('in'); mark.classList.remove('in'); statusEl.classList.remove('in');
+    pctn.style.opacity = ''; shownPct = 0; pctn.textContent = '0';
+    setProgress(0);
+    stext.textContent = STAGES[0];
+    var tl = buildTicks();
+    void stage.offsetWidth;
+
+    if (reduced) { finishStatic(); return; }
+
+    at(0, function () { stage.classList.add('on'); });
+    at(120, function () { dial.classList.add('in'); });
+
+    tl.forEach(function (t, i) {
+      at(280 + i * 36, function () { t.classList.add('open'); });
+    });
+
+    at(760, function () { mark.classList.add('in'); statusEl.classList.add('in'); });
+
+    MILESTONE_MS.forEach(function (t, i) {
+      at(t, function () {
+        setProgress(MILESTONE_PCT[i]);
+        tweenPct(MILESTONE_PCT[i]);
+        setStatus(STAGES[i]);
+        if (i === 3) stage.classList.add('ready');   // rings stop · dot locks in · one pulse
+      });
+    });
+  }
+
+  stage.addEventListener('click', run);
+  run();
+})();
+</script>
+</body>
+</html>
