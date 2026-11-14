@@ -1,9 +1,21 @@
 ﻿# PROBLEMS.md
 
 > **Purpose:** Issue tracker for AI agents and humans - all known bugs, feature requests, and their resolution status.
-> **Last Updated:** 2026-08-10 (Subscription duplicate transactions + stuck Failed/Retry + FT repayment tags mismatch fixed)
-> **Total Issues:** 153
+> **Last Updated:** 2026-11-14 (landing animated vault lap silently lands short — root-caused, fix designed, awaiting CZ decision)
+> **Total Issues:** 154
 > **Parse Priority:** High
+
+---
+
+## 🐛 2026-11-14 — Landing: ANIMATED vault lap silently lands on the wrong detent (session opencode-landing-rev2-20261112)
+
+> CZ report path: tab-switch / "run the tour" vault lap on https://rheooo.netlify.app (rev-3) settles on `dial 20`/`dial 10`, `path.sil.hi`=0, vault never opens, ZERO console errors. Reduced-motion path works (`sil.hi`×3). Timers/rAF/IO verified healthy; deployed hairline = local 0.5.1 (constants 3.6, /22,0,1, .35 identical).
+
+| # | Issue | Status | Notes |
+|---|-------|--------|-------|
+| 1 | Animated lap's ease-out sweep peaks ~261 u/s > hairline@0.5.1's ±150 u/s `spin.w` clamp → integral deficit ≈ 20 units → dial rises (30→…→119) then STALLS at the nearest detent BELOW target when tail velocity decays under the detent catch; release-at-150 coasts +44 units (τ≈0.3s — explains rev-2's 70/90 overshoot) | AI Attempted Fix | **NOT shipped** — lap is signed rev-3 choreography; fix needs CZ approval. Fix design (measured): fast LINEAR bulk at ≤150 u/s to ~raw 138, then decelerate to w≈4 arriving raw 141 — detent catch engages AT raw 140 (= dial 40 = open detent) so \|a−40\|<0.8 && \|w\|<6 fires; compensate small lerp-startup deficit empirically. Probe evidence: `agent/docs/generate-prompt-docs/landing-round07-13112026/` + live CDP sessions 2026-11-14. |
+
+**Verification:** n/a until a driver change ships — re-run the animated lap probe (tab-switch + tour, dial settles 40, `path.sil.hi`×3).
 
 ---
 
