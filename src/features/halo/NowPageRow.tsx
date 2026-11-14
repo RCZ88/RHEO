@@ -104,14 +104,30 @@ function Block({ label, children }: { label: string; children: React.ReactNode }
 export interface NowPageRowProps {
   currentApp: NowPayload | null;
   ai: AiUsagePayload | null | undefined;
+  /** N4 — the tier WORD and the continuous minutes in it (`APP · DISTRACTING 4M`).
+   * Words, not colour alone: the label carries what the tier hairline already tints. */
+  tierWord?: string | null;
+  tierMinutes?: number | null;
 }
 
-export const NowPageRow = memo(function NowPageRow({ currentApp, ai }: NowPageRowProps) {
+export const NowPageRow = memo(function NowPageRow({ currentApp, ai, tierWord, tierMinutes }: NowPageRowProps) {
   const app = currentApp;
   const appAbsent =
     !app || app.app === 'No app detected' || !app.app || app.app === '—';
   const appTime = appAbsent ? null : fmtDuration(app?.secondsInApp);
   const inBrowser = app?.category === 'Browser';
+
+  /* N4 — the APP eyebrow grows the tier word and the continuous minutes in that tier:
+   * `APP · DISTRACTING 4M`. The word is present even when the row's tier hairline is the
+   * only other carrier, because meaning must never ride on colour alone. Under a minute
+   * in the tier, the label stays the plain `APP` — a "0m" would be a lie the number
+   * cannot defend. */
+  const appLabel =
+    tierWord && !appAbsent
+      ? typeof tierMinutes === 'number' && tierMinutes >= 1
+        ? `App · ${tierWord} ${tierMinutes}m`
+        : `App · ${tierWord}`
+      : 'App';
 
   /* The Website row, one honest shape per §3's table. Order matters: privacy is tested
    * BEFORE the domain because main withholds the domain for a private window. */
@@ -141,7 +157,7 @@ export const NowPageRow = memo(function NowPageRow({ currentApp, ai }: NowPageRo
       className="flex items-center"
       style={{ gap: 'var(--halo-gap-loose)', height: '100%', minWidth: 0 }}
     >
-      <Block label="App">
+      <Block label={appLabel}>
         {appAbsent ? (
           <NameRow icon={AppWindow} name="No active app" time={null} muted />
         ) : (

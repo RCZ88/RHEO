@@ -13,6 +13,7 @@ export const PRIORITY = {
   criticalError: 900,
   directUserFeedback: 800,
   recording: 750,
+  breakPromise: 700,
   focusCountdown: 600,
   nextBlock: 550,
   stopwatchRunning: 500,
@@ -40,7 +41,11 @@ export function priorityForKind(kind: ActivityKind): number {
       return PRIORITY.recording;
     case 'focus':
       return PRIORITY.focusCountdown;
-    case 'nextBlock':
+    case 'break':
+      // Rank 3 in HALO_FIT's queue — just below dictation (750, the live microphone)
+      // and above the imminent class (550). A promise you made to yourself outranks
+      // upcoming context but must never steal the pill from a live recording.
+      return PRIORITY.breakPromise;
       // DEVIATION 3 — 550, between focus (600) and the running stopwatch (500).
       // "Your class starts in 8 minutes" outranks the accumulating stopwatch
       // precisely because the stopwatch does not interrupt anything (see

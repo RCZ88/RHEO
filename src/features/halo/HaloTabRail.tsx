@@ -64,6 +64,12 @@ export interface HaloTabRailProps {
    */
   order?: readonly HaloPage[];
   hidden?: readonly HaloPage[];
+  /**
+   * Per-page attention dot (HALO_FIT 3C): `true` puts a 6px accent dot on that tab —
+   * "an agent needs you". The title/aria gains the words so the signal is never
+   * colour-only.
+   */
+  dots?: Partial<Record<HaloPage, boolean>>;
 }
 
 /** The pages that actually get a tab, in the user's order. */
@@ -114,6 +120,7 @@ active,
     disabled,
     order,
     hidden,
+    dots,
   }: HaloTabRailProps) {
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     // ctrlKey, not altKey/metaKey: the handoff says Ctrl+Left / Ctrl+Right, and the island
@@ -164,6 +171,9 @@ active,
       {visiblePages(order, hidden).map((page) => {
         const { label, icon: Icon } = PAGE_META[page];
         const isActive = page === active;
+        /* HALO_FIT 3C — the attention dot and its words travel together. */
+        const hasDot = dots?.[page] === true;
+        const labelWithDot = hasDot ? `${label}, needs attention` : label;
         return (
           <button
             key={page}
@@ -173,15 +183,33 @@ active,
             /* DISABLED uses muted colour + is never hidden, and no `opacity` on the text
              * (handoff §9: "Never use opacity on text"). */
             disabled={disabled}
-            title={label}
+            title={labelWithDot}
+            aria-label={labelWithDot}
             onClick={() => !disabled && onSelect(page)}
             /* The interactive states live in halo.css as `.halo-tab`, because inline styles
              * cannot express hover, :active or :focus-visible and PAINT Gate D requires all
              * four on every interactive element. */
             className={iconOnly ? 'halo-tab halo-tab--icon-only' : 'halo-tab'}
             data-active={isActive ? 'true' : 'false'}
+            data-halo-dot={hasDot ? 'true' : undefined}
           >
-            <Icon size={14} aria-hidden="true" />
+            <span style={{ position: 'relative', display: 'inline-flex' }}>
+              <Icon size={14} aria-hidden="true" />
+              {hasDot && (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    top: -2,
+                    right: -3,
+                    width: 6,
+                    height: 6,
+                    borderRadius: 999,
+                    background: 'var(--halo-accent)',
+                  }}
+                />
+              )}
+            </span>
             {!iconOnly && <span className="halo-tab-label">{label}</span>}
           </button>
         );

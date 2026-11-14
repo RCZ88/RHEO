@@ -57,6 +57,7 @@ export const LANE_OF: Record<ActivityKind, Lane> = {
    * The next block is upcoming-time context — live state like afkGap. */
   external: 'resident',
   nextBlock: 'live',
+  break: 'live',
 
   critical: 'toast',
   hud: 'resident',
@@ -675,6 +676,9 @@ export const SURFACES: CuratedSurface[] = [
    * `nextBlock` is [CalendarClock][title][in 8m]. Both route into Life. */
   { kind: 'external', lane: 'resident', icon: 'dumbbell', compactChars: 14, liveOnly: false, route: '/life' },
   { kind: 'nextBlock', lane: 'live', icon: 'calendar-clock', compactChars: 12, liveOnly: false, route: '/life' },
+  /* HALO_FIT rank 3 — the break promise. Live-state-only: it exists while the user is
+   * on a break and vanishes with it. [Coffee][Back HH:MM][mono left] in the pill. */
+  { kind: 'break', lane: 'live', icon: 'coffee', compactChars: 5, liveOnly: true, route: null },
   { kind: 'afkGap', lane: 'live', icon: 'coffee', compactChars: 6, liveOnly: true, route: '/activity' },
   { kind: 'aiUsage', lane: 'resident', icon: 'sparkles', compactChars: 6, liveOnly: false, route: '/ai' },
   { kind: 'hud', lane: 'toast', icon: 'terminal', compactChars: 7, liveOnly: false, route: '/penguin-console' },

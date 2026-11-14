@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { LayoutGroup, AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { GripHorizontal, Mic, Pause, Pin, Play, RotateCcw, Timer } from 'lucide-react';
+import { Coffee, GripHorizontal, Mic, Pause, Pin, Play, RotateCcw, SquareTerminal, StickyNote, Timer, X } from 'lucide-react';
 import { StopwatchHero } from './StopwatchHero';
 import { CompactPill, type CompactKind } from './CompactPill';
 import { FocusPageRow, type HaloFocusState } from './FocusPageRow';
@@ -11,7 +11,7 @@ import { NowPageRow } from './NowPageRow';
 import { getAfkPrefs, isPassiveCategory } from '../../lib/afk';
 import { DictationIsland } from './DictationIsland';
 import './halo.css';
-import type { CriticalPayload, DictationPayload, NowPayload, StopwatchPayload } from '../../shared/halo/types';
+import type { BreakPayload, CriticalPayload, DictationPayload, NowPayload, StopwatchPayload } from '../../shared/halo/types';
 import {
   HALO_DEFAULT_ORDER,
   HALO_DEFAULTS,
@@ -22,7 +22,6 @@ import {
   surfaceAnchorFractions,
   surfaceTransformOrigin,
   visibleOrder,
-  HALO_DEFAULT_PAGE_ORDER,
   HALO_PREFS_KEY,
   type HaloPrefs,
 } from './HaloPreferences';
@@ -275,6 +274,25 @@ const FIXTURE_APP: NowPayload = { app: 'No app detected', category: '—', tier:
  * open DEADLINES are read together so they can never disagree about `now` (the two queries
  * used to be two `Date.now()`s, which is enough to place a 00:00 deadline on different days).
  */
+/** `break` pill — the wall clock the promise ends at, 24-hour HH:MM ("Back 14:30").
+ *  Formed here, where `now` already ticks every second, so the pill never computes a time
+ *  of its own. */
+function formatWallClockShort(ms: number): string {
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** `break` pill — the mono countdown, mm:ss (h:mm:ss past the hour). Clamped at zero:
+ *  a one-tick race between the broadcast and the clock must never print a negative. */
+function fmtPillCountdown(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const two = (n: number): string => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${two(m)}:${two(sec)}` : `${two(m)}:${two(sec)}`;
+}
+
 /** The kinds that have a board-1 pill DESIGN in HALO_STATES.html. Anything else keeps the
  *  app-derived default rather than rendering an undesigned pill. */
 const BOARD1_PILL_KINDS = new Set<CompactKind>([
@@ -291,6 +309,8 @@ const BOARD1_PILL_KINDS = new Set<CompactKind>([
   /* HALO_FIT promoted kinds — both have a designed pill layout in CompactPill. */
   'external',
   'nextBlock',
+  /* N2's running promise — designed pill: [Coffee][Back HH:MM][mono left]. */
+  'break',
 ]);
 
 export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
@@ -325,14 +345,13 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
    * temporal dead zone until its declaration executes — hook order in the source is the
    * declaration order at runtime. It must sit above its first use. */
   const hoverTriggered = prefs.trigger?.mode === 'hover' || prefs.trigger?.mode === 'hover-or-click';
-  /* `'stopwatch'` is NOT a HaloPage (`'focus' | 'now' | 'deadlines' | 'tools'`). Every
-   * collapsed-pill element is gated on `tab === 'focus'`, so seeding state with a value no
-   * page can ever equal left the whole pill EMPTY at launch — no hero, no pip, nothing.
-   * It is seeded from the user's page order so the first painted page is one they chose and
-   * one that actually exists; `HALO_DEFAULT_PAGE_ORDER[0]` is 'focus'. */
-  const [tab, setTab] = useState<ActivityTab>(
-    () => HALO_DEFAULT_PAGE_ORDER[0] as ActivityTab,
-  );
+  /* CZ'S RULE, 2026-11-14: "IF THE FOCUS IS FOR THE FOCUS MODE IT SHOULDN'T BE DEFAULT ON
+   * FOCUS IF THE USER ISN'T IN FOCUS MODE." The open face is NOW — what is actually
+   * happening — and Focus only LEADS when a real session is running (effect below).
+   * 'now' is always a member of the page order, so this seed can never name a page the
+   * user hid; the seed of `HALO_DEFAULT_PAGE_ORDER[0]` ('focus') broke the rule every
+   * time the island opened without a session. */
+  const [tab, setTab] = useState<ActivityTab>('now');
 
   /* The user's page sequence minus hidden pages. Page switching (Ctrl+arrows, wheel, tab rail)
    * walks THIS, not all four, so a hidden page can never be selected and render an empty row. */
@@ -368,6 +387,66 @@ export function OverlayRoot({ inApp = false }: { inApp?: boolean }) {
   const [life, setLife] = useState<HaloLifePayload | null>(null);
   const [lifeError, setLifeError] = useState<string | null>(null);
   const [focus, setFocus] = useState<HaloFocusState | null>(null);
+  /* N2 — THE BREAK PROMISE. Main stores the window and broadcasts it (`halo:break`), so
+   * every window honours the same countdown and a remount recovers it via `getBreak()`.
+   * The island derives the countdown from its own 1 Hz `now`; it never re-times main. */
+  const [breakUntil, setBreakUntil] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    let off: (() => void) | undefined;
+    try {
+      void bridge?.getBreak?.()
+        .then((r: { ok?: boolean; untilMs?: number }) => {
+          if (cancelled) return;
+          const ms = r?.untilMs;
+          if (typeof ms === 'number' && ms > Date.now()) setBreakUntil(ms);
+        })
+        .catch(() => { /* an unreadable promise is simply no break */ });
+      off = bridge?.onBreak?.((b: { untilMs?: number } | null) => {
+        const ms = b?.untilMs;
+        setBreakUntil(typeof ms === 'number' && ms > Date.now() ? ms : null);
+      });
+    } catch { /* bridge absent — no break UI, no crash */ }
+    return () => {
+      cancelled = true;
+      off?.();
+    };
+  }, []);
+
+  /* N3 — QUICK CAPTURE. An in-place editor on the Tools row. `setWindowFocusable(true)`
+   * is the whole point of the cell: a textarea you can actually type into needs OS
+   * keyboard focus, and the island window is click-through-adjacent by design. Every
+   * exit path restores it to false — save, cancel, Escape — so the island never keeps
+   * the keyboard hostage. On a failed write the TEXT is kept and the honest sentence
+   * is shown; a capture that silently vanishes is the dishonest kind. */
+  const [captureOpen, setCaptureOpen] = useState(false);
+  const [captureText, setCaptureText] = useState('');
+  const [captureError, setCaptureError] = useState<string | null>(null);
+  const CAPTURE_MAX = 140;
+  const openCapture = (): void => {
+    setCaptureOpen(true);
+    setCaptureError(null);
+    try { bridge?.setWindowFocusable?.(true); } catch { /* unsupported platform — still usable by mouse */ }
+  };
+  const closeCapture = (): void => {
+    setCaptureOpen(false);
+    setCaptureError(null);
+    try { bridge?.setWindowFocusable?.(false); } catch { /* mirror of open */ }
+  };
+  const saveCapture = (): void => {
+    const text = captureText.trim();
+    if (!text) { setCaptureError('Nothing to capture.'); return; }
+    void bridge?.quickNote?.(text)
+      .then((r: { ok?: boolean; error?: string }) => {
+        if (r?.ok) {
+          setCaptureText('');
+          closeCapture();
+        } else {
+          setCaptureError(`Note not saved because ${r?.error ?? 'the write failed'}. Retry.`);
+        }
+      })
+      .catch(() => setCaptureError('Note not saved because the bridge failed. Retry.'));
+  };
   /* §12 error state. The producer below used to swallow BOTH a thrown call and an `ok:false`
    * reply into the same "no entry" outcome, so a dead database and an empty one were
    * indistinguishable in the UI — and a dead one looked like a healthy empty list.
@@ -1109,6 +1188,12 @@ const inBrowser = currentApp.category === 'Browser';
       }
     if (producers.hud) out.push(mk('hud', producers.hud));
     if (producers.deadline) out.push(mk('nextDeadline', producers.deadline));
+    /* `break` — N2's running promise. Live lane (LANE_OF.break, priorityForKind resolves
+     * 700), emitted only while the window is genuinely in the future, so an expired or
+     * ended break produces NO activity and the pill hands the clock back. */
+    if (breakUntil != null && breakUntil > t) {
+      out.push(mk('break', { untilMs: breakUntil } satisfies BreakPayload, { persistent: false }));
+    }
     /* `nextBlock` — HALO_FIT's rank-6 "next up". `life.schedule` ALREADY carries the
      * nearest recurring block with absolute epoch stamps and `isNow`, so this is pure
      * projection: the pill admits a block only inside a 15-minute approach window,
@@ -1134,7 +1219,7 @@ const inBrowser = currentApp.category === 'Browser';
       }
     }
     return out;
-  }, [swPayload, storeSnap, currentApp, remote?.dictation, producers, afkPrefs, life]);
+  }, [swPayload, storeSnap, currentApp, remote?.dictation, producers, afkPrefs, life, breakUntil]);
 
   /* User layout: which widgets are on, in what order, how many at once. `visibleOrder`
    * drops hidden kinds; the model's `maxVisible` then caps the roster.
@@ -1456,6 +1541,24 @@ const inBrowser = currentApp.category === 'Browser';
    * case the reading cannot cover — no foreground app at all (`currentApp` is the fixture, whose
    * tier is the honest 'neutral'). */
   const ambientTier = currentApp.tier ?? swPayload.tier;
+
+  /* N4 — THE TIER WORDS + CONTINUOUS MINUTES. The Now page's APP block reads
+   * `APP · DISTRACTING 4M`. The streak is measured on the FOREGROUND app's tier
+   * (`currentApp.tier` — the same reading that tints the ambient edge), and the timer
+   * resets whenever the tier changes, not when the app changes: the sentence is about
+   * the tier, so "how long have you been in distracting" is what it answers. */
+  const tierSinceRef = useRef<{ tier: string; sinceMs: number }>({ tier: '', sinceMs: 0 });
+  const liveTier = typeof currentApp.tier === 'string' ? currentApp.tier : null;
+  useEffect(() => {
+    if (tierSinceRef.current.tier !== (liveTier ?? '')) {
+      tierSinceRef.current = { tier: liveTier ?? '', sinceMs: Date.now() };
+    }
+  }, [liveTier]);
+  const tierWord = liveTier ? liveTier.toUpperCase() : null;
+  const tierMinutes =
+    liveTier && tierSinceRef.current.sinceMs > 0
+      ? Math.floor(Math.max(0, now - tierSinceRef.current.sinceMs) / 60_000)
+      : null;
 
   /* ONE ERROR FOR THE SCHEDULE PAGE. Two producers read the same `deadlines` table — the
    * single-row one that feeds the pill and the list one that feeds this page — so if either
@@ -2039,6 +2142,16 @@ const inBrowser = currentApp.category === 'Browser';
                       externalName={producers.external?.name}
                       blockTitle={pillKind === 'nextBlock' ? blockTitle : undefined}
                       blockIn={pillKind === 'nextBlock' ? blockIn : undefined}
+                      breakBackAt={
+                        pillKind === 'break' && breakUntil != null && breakUntil > now
+                          ? formatWallClockShort(breakUntil)
+                          : undefined
+                      }
+                      breakLeft={
+                        pillKind === 'break' && breakUntil != null && breakUntil > now
+                          ? fmtPillCountdown(breakUntil - now)
+                          : undefined
+                      }
                     />
                   </motion.span>
                 </AnimatePresence>
@@ -2126,6 +2239,22 @@ const inBrowser = currentApp.category === 'Browser';
             completeMs={!sessionActive ? completeMs : null}
             onDismissComplete={() => setCompleteMs(null)}
             onEditFocus={() => bridge?.navigate?.('/activity?tab=focus')}
+            onStartFocus={(durationSec) =>
+              void bridge?.startFocus?.({ durationSec }).then((r: { ok?: boolean; error?: string }) => {
+                if (r?.ok === false && r.error) console.warn('[halo] start-focus refused:', r.error);
+              }).catch(() => {})
+            }
+            onStartBreak={(untilMs) =>
+              void bridge?.setBreak?.({ untilMs }).then((r: { ok?: boolean; error?: string }) => {
+                if (r?.ok === false && r.error) console.warn('[halo] break refused:', r.error);
+              }).catch(() => {})
+            }
+            onEndBreak={() =>
+              void bridge?.setBreak?.({ action: 'end' }).then((r: { ok?: boolean; error?: string }) => {
+                if (r?.ok === false && r.error) console.warn('[halo] break-end refused:', r.error);
+              }).catch(() => {})
+            }
+            breakUntil={breakUntil}
           />
         )}
 
@@ -2214,7 +2343,7 @@ const inBrowser = currentApp.category === 'Browser';
          * screen. The AI block renders only when its producer delivered (NowPageRow's honesty
          * rule), and the whole thing is one fixed-height row like every other page. */}
         {expanded && tab === 'now' && (
-          <NowPageRow currentApp={currentApp} ai={producers.ai} />
+          <NowPageRow currentApp={currentApp} ai={producers.ai} tierWord={tierWord} tierMinutes={tierMinutes} />
         )}
 
         {/* ══ THE SCHEDULE PAGE — a compact LIFE → SCHEDULE view ══════════════════
@@ -2258,23 +2387,107 @@ const inBrowser = currentApp.category === 'Browser';
 
         {expanded && tab === 'tools' && (
           <div className="flex items-center" style={{ gap: 'var(--halo-gap-loose)', height: size.rowHeight }}>
-            <DictationIsland expanded={expanded} registerToggle={registerToggle} />
-            <span aria-hidden="true" style={DIVIDER} />
-            <button
-              type="button"
-              onClick={() => bridge?.navigate?.('/penguin-console')}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8, minHeight: 44,
-                background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
-              }}
-            >
-              <span className="truncate" style={{ fontSize: 'var(--halo-t-value)' }}>Console</span>
-              {producers.hud && typeof producers.hud.activeSessions === 'number' && (
-                <span style={{ fontSize: 'var(--halo-t-label)', color: 'var(--halo-muted)' }}>
-                  {producers.hud.activeSessions} session{producers.hud.activeSessions === 1 ? '' : 's'}
+            {/* ── N3 — THE IN-PLACE CAPTURE EDITOR. The three cells swap for this view;
+             * the row height NEVER changes. Enter saves, Escape cancels (both restore
+             * window focusability), and a failed write keeps the text. */}
+            {captureOpen ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                <textarea
+                  ref={(el) => { if (el && captureOpen) el.focus(); }}
+                  value={captureText}
+                  maxLength={CAPTURE_MAX}
+                  placeholder={captureError ?? 'Capture a thought…'}
+                  onChange={(e) => { setCaptureText(e.target.value); setCaptureError(null); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); saveCapture(); }
+                    else if (e.key === 'Escape') { e.preventDefault(); closeCapture(); }
+                  }}
+                  rows={1}
+                  style={{
+                    flex: 1, minWidth: 0, height: 44, resize: 'none',
+                    background: 'var(--halo-raised, rgba(255,255,255,0.03))',
+                    border: '1px solid var(--halo-border)',
+                    borderRadius: 'var(--halo-radius-r, 8px)',
+                    color: 'var(--halo-text)', caretColor: 'var(--halo-accent)',
+                    font: 'var(--halo-font-mono, ui-monospace, monospace)',
+                    fontSize: 'var(--halo-t-value, 13px)',
+                    padding: '0 10px', outline: 'none',
+                  }}
+                />
+                <span
+                  aria-hidden="true"
+                  style={{ fontSize: 'var(--halo-t-label, 10px)', color: 'var(--halo-muted)', font: 'var(--halo-font-mono, ui-monospace, monospace)', flexShrink: 0 }}
+                >
+                  {CAPTURE_MAX - captureText.length}
                 </span>
-              )}
-            </button>
+                <button
+                  type="button"
+                  onClick={saveCapture}
+                  disabled={!captureText.trim()}
+                  title="Save to notes (Enter)"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6, height: 28,
+                    padding: '0 12px', border: 'none', borderRadius: 999,
+                    background: captureText.trim() ? 'var(--halo-accent)' : 'var(--halo-border)',
+                    color: captureText.trim() ? 'var(--halo-on-accent, #09090b)' : 'var(--halo-muted)',
+                    cursor: captureText.trim() ? 'pointer' : 'default',
+                    fontSize: 'var(--halo-t-value, 13px)', flexShrink: 0,
+                  }}
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={closeCapture}
+                  title="Cancel (Esc)"
+                  aria-label="Cancel capture"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 28, height: 28, border: '1px solid var(--halo-border)', borderRadius: 999,
+                    background: 'transparent', color: 'var(--halo-muted)', cursor: 'pointer', flexShrink: 0,
+                  }}
+                >
+                  <X size={13} strokeWidth={2} aria-hidden="true" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <DictationIsland expanded={expanded} registerToggle={registerToggle} />
+                <span aria-hidden="true" style={DIVIDER} />
+                <button
+                  type="button"
+                  onClick={() => bridge?.navigate?.('/penguin-console')}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, minHeight: 44,
+                    background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+                  }}
+                >
+                  <SquareTerminal size={14} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-muted)' }} />
+                  <span className="truncate" style={{ fontSize: 'var(--halo-t-value)' }}>Console</span>
+                  {producers.hud && typeof producers.hud.activeSessions === 'number' && (
+                    <span style={{ fontSize: 'var(--halo-t-label)', color: 'var(--halo-muted)' }}>
+                      {producers.hud.activeSessions} session{producers.hud.activeSessions === 1 ? '' : 's'}
+                      {typeof producers.hud.waiting === 'number' && producers.hud.waiting > 0
+                        ? `, ${producers.hud.waiting} waiting`
+                        : ''}
+                    </span>
+                  )}
+                </button>
+                <span aria-hidden="true" style={DIVIDER} />
+                <button
+                  type="button"
+                  onClick={openCapture}
+                  title="Quick capture (types into the island)"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, minHeight: 44,
+                    background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+                  }}
+                >
+                  <StickyNote size={14} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-muted)' }} />
+                  <span className="truncate" style={{ fontSize: 'var(--halo-t-value)' }}>Capture</span>
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -2296,6 +2509,9 @@ const inBrowser = currentApp.category === 'Browser';
               inset={size.padding}
               order={visiblePageSeq}
               hidden={prefs.pages?.hidden}
+              /* 3C — the waiting dot. An agent that needs you lights the Tools tab; the
+               * words ("Tools, needs attention") ride the title/aria, never colour alone. */
+              dots={{ tools: (producers.hud?.waiting ?? 0) > 0 }}
             />
             {/* the pin, again — see the legacy rail note above */}
             {prefs.showPin && (

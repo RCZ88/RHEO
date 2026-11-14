@@ -25691,6 +25691,24 @@ if (!gotTheLock) {
        * of waiting for the next change to hear about it. */
       electron_1.ipcMain.handle('halo:get-break', () => ({ ok: true, untilMs: haloBreakUntilMs }));
 
+      // ── halo:set-focusable ───────────────────────────────────────────────────
+      // N3 quick capture: the island window is non-focusable by design (an
+      // always-on-top instrument must never steal the keyboard), but its capture
+      // editor NEEDS real OS keyboard focus. The renderer toggles it around the
+      // editor's life and every exit path restores it. Defensive: platforms that
+      // lack setFocusable answer false and nothing breaks.
+      electron_1.ipcMain.handle('halo:set-focusable', (e, input: { focusable?: boolean }) => {
+        try {
+          const w = electron_1.BrowserWindow.fromWebContents(e.sender);
+          if (!w || w.isDestroyed()) return { ok: false, error: 'Window is gone.' };
+          if (typeof w.setFocusable !== 'function') return { ok: false, error: 'Not supported here.' };
+          w.setFocusable(input?.focusable !== false);
+          return { ok: true, focusable: w.isFocusable?.() ?? undefined };
+        } catch (err: any) {
+          return { ok: false, error: String(err?.message ?? err).slice(0, 160) };
+        }
+      });
+
       // ── halo:quick-note ──────────────────────────────────────────────────────
       // N3 quick capture. Writes the REAL `notes` table the Life page already reads —
       // a capture that vanishes into an island-only store would be the dishonest kind.

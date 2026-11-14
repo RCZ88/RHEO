@@ -1,4 +1,4 @@
-import { AppWindow, Bot, CalendarClock, CalendarDays, Dumbbell, Globe, Lock, Mic, SquareTerminal, TriangleAlert } from 'lucide-react';
+import { AppWindow, Bot, CalendarClock, CalendarDays, Coffee, Dumbbell, Globe, Lock, Mic, SquareTerminal, TriangleAlert } from 'lucide-react';
 import type { CSSProperties, ReactElement } from 'react';
 import type { NowPayload, StopwatchPayload } from '../../shared/halo/types';
 
@@ -53,6 +53,10 @@ export interface CompactPillProps {
   blockTitle?: string;
   /** `nextBlock` only — "in 8m" / "now"; the pill never computes this itself. */
   blockIn?: string;
+  /** `break` only — the wall clock the break ends at, e.g. "Back 14:30". */
+  breakBackAt?: string;
+  /** `break` only — the mono countdown, e.g. "09:41". */
+  breakLeft?: string;
 }
 
 /** Board 1's ten kinds, in the file's own order, plus the two HALO_FIT-promoted kinds
@@ -70,7 +74,8 @@ export type CompactKind =
   | 'critical'
   /* HALO_FIT promoted kinds — layouts argued in the two branches below. */
   | 'external'
-  | 'nextBlock';
+  | 'nextBlock'
+  | 'break';
 
 const DIVIDER = (h: number): CSSProperties => ({
   width: 1,
@@ -95,6 +100,8 @@ export function CompactPill(props: CompactPillProps): ReactElement {
     externalName,
     blockTitle,
     blockIn,
+    breakBackAt,
+    breakLeft,
   } = props;
 
   /* `width: 100%` + a bounded parent is what makes the name's flex-shrink meaningful: the row
@@ -351,6 +358,19 @@ export function CompactPill(props: CompactPillProps): ReactElement {
         {icon(CalendarClock)}
         {name(blockTitle || 'Next block', 'var(--halo-muted)')}
         {blockIn && mut(blockIn, true)}
+      </span>
+    );
+  }
+
+  /* HALO_FIT — `break`: [Coffee][Back 14:30][mono 09:41]. The break is a promise, not a
+   * stopwatch state — the island owns the countdown, so both labels arrive preformatted
+   * and the pill never computes a time of its own. */
+  if (kind === 'break') {
+    return (
+      <span style={row}>
+        {icon(Coffee)}
+        {name(breakBackAt || 'On break', 'var(--halo-muted)')}
+        {breakLeft && mut(breakLeft, true)}
       </span>
     );
   }

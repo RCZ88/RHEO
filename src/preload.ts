@@ -2513,6 +2513,17 @@ contextBridge.exposeInMainWorld('haloBridge', {
     ipcRenderer.invoke('halo:break', input),
   getBreak: () => ipcRenderer.invoke('halo:get-break'),
   quickNote: (text: string) => ipcRenderer.invoke('halo:quick-note', { text }),
+  /* N2 — the break promise broadcast (`halo:break`, untilMs 0 = ended). */
+  onBreak: (cb: (b: { untilMs?: number } | null) => void) => {
+    const handler = (_event: unknown, b: { untilMs?: number } | null) => cb(b);
+    ipcRenderer.on('halo:break', handler);
+    return () => ipcRenderer.removeListener('halo:break', handler);
+  },
+  /* N3 — the capture editor needs real keyboard focus; the island window is
+   * otherwise non-focusable. Best-effort on both sides: a platform without the
+   * API answers `false` and the editor is still usable by mouse. */
+  setWindowFocusable: (focusable: boolean) =>
+    ipcRenderer.invoke('halo:set-focusable', { focusable }),
   onSnapshot: (cb: (snapshot: unknown) => void) => {
     const handler = (_event: unknown, snapshot: unknown) => cb(snapshot);
     ipcRenderer.on('halo:snapshot', handler);

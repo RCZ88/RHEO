@@ -18,8 +18,8 @@
  * THE PRIVACY RULE IS UNCHANGED: a private window shows a lock and the words "Private window",
  * never a hostname. `tracked.kind === 'priv'` carries no hostname at all.
  */
-import { memo, useEffect, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
-import { AppWindow, Check, ChevronLeft, ChevronRight, Coffee, Globe, Lock, Pause, Play, RotateCcw, X } from 'lucide-react';
+import { memo, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { AppWindow, Check, ChevronLeft, ChevronRight, Coffee, Globe, Lock, Pause, Play, RotateCcw, Target, X } from 'lucide-react';
 import { formatStopwatch, type StopwatchSnapshot } from '../../lib/stopwatchStore';
 
 /** The shape `halo:get-focus` returns (`FocusManager.getPublicState()`). */
@@ -57,6 +57,14 @@ export interface FocusPageRowProps {
   onDismissComplete?: () => void;
   /** Editing the allow-list is a hand-off (no write API), so this navigates to the Focus tab. */
   onEditFocus?: () => void;
+  /** N1 — start a focus session. `0` = open-ended (the manager's stopwatch mode). */
+  onStartFocus?: (durationSec: number) => void;
+  /** N2 — start the break promise; the island owns the countdown, main stores the window. */
+  onStartBreak?: (untilMs: number) => void;
+  /** N2 — end the break early (the one 44px play button). */
+  onEndBreak?: () => void;
+  /** epoch ms the running break ends; `null`/absent = no break. */
+  breakUntil?: number | null;
 }
 
 const MONO = 'var(--font-mono, ui-monospace, monospace)';
@@ -220,7 +228,7 @@ export const FocusPageRow = memo(function FocusPageRow({
   onDismissComplete,
   onEditFocus,
 }: FocusPageRowProps) {
-  const [view, setView] = useState<'row' | 'allowed'>('row');
+  const [view, setView] = useState<'row' | 'allowed' | 'start' | 'break-set'>('row');
 
   /* A session is only trusted when the producer ANSWERED. A failed read must never swap a
    * live countdown for a stopwatch while a lock is actually engaged. */
@@ -235,6 +243,12 @@ export const FocusPageRow = memo(function FocusPageRow({
   }, [sessionActive]);
 
   const tickNow = typeof now === 'number' && Number.isFinite(now) ? now : Date.now();
+  /* The break promise (N2). Derived from `tickNow` (the parent's 1 Hz tick) so it re-evaluates
+   * every second; it still runs before the early returns. */
+  const breakLive =
+    !session && typeof breakUntil === 'number' && breakUntil > tickNow;
+  const breakMs = breakLive && breakUntil != null ? Math.max(0, breakUntil - tickNow) : 0;
+
   const endsAt = typeof session?.endsAt === 'number' ? session.endsAt : null;
   const startedAt = typeof session?.startedAt === 'number' ? session.startedAt : null;
   const sessionMs =
@@ -274,6 +288,99 @@ export const FocusPageRow = memo(function FocusPageRow({
         </div>
         <span aria-hidden="true" style={{ flex: 1 }} />
         <IconBtn label="Dismiss" onClick={() => onDismissComplete?.()}>
+          <X size={16} strokeWidth={2} aria-hidden="true" />
+        </IconBtn>
+      </div>
+    );
+  }
+
+  /* ── 1b. THE BREAK ROW (N2) — an honest promise, not a stopwatch state. ────────────────
+   * BREAK eyebrow, a ticking mono countdown, the BACK AT wall clock, and ONE 44px play
+   * button that ends it. The countdown lives in the island (main only stores the window),
+   * so this is display of island state, exactly like the design says: "the break countdown
+   * lives in the island only". */
+  if (breakLive && breakUntil != null) {
+    const backAt = formatWallClock(breakUntil);
+    return (
+      <div
+        className="halo-row-swap"
+        data-halo-focus-row="break"
+        style={{ display: 'flex', alignItems: 'center', gap: 'var(--halo-gap-loose, 12px)', width: '100%', minWidth: 0 }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Coffee size={11} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--halo-accent)' }} />
+            <span style={{ ...EYEBROW, color: 'var(--halo-text)' }}>Break</span>
+          </div>
+          <Clock ms={breakMs} />
+        </div>
+        <span aria-hidden="true" style={DIVIDER} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+          <span style={LABEL}>Back at</span>
+          <span style={{ ...VALUE, color: 'var(--halo-text)' }}>{backAt}</span>
+        </div>
+        <span aria-hidden="true" style={{ flex: 1 }} />
+        <IconBtn label="End break" onClick={() => onEndBreak?.()}>
+          <Play size={13} strokeWidth={2} aria-hidden="true" />
+        </IconBtn>
+      </div>
+    );
+  }
+
+  /* ── 1c. THE START EDITOR (N1) — an in-place view; the row height NEVER changes. ────────
+   * Opened by the Target control on the normal row. Focus lengths are committed with a
+   * HOLD (the picked direction's "hardware moment": the button charges under the finger
+   * and drains back on early release), because starting a session is deliberate. Break
+   * opens the second stage, where the length picks the promise. */
+  if (view === 'start' || view === 'break-set') {
+    const isBreakStage = view === 'break-set';
+    return (
+      <div
+        className="halo-row-swap"
+        data-halo-focus-row={isBreakStage ? 'break-set' : 'start'}
+        style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', minWidth: 0 }}
+        onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+          if (e.key === 'Escape') setView('row');
+        }}
+      >
+        <IconBtn
+          label={isBreakStage ? 'Back to focus lengths' : 'Close'}
+          onClick={() => setView(isBreakStage ? 'start' : 'row')}
+        >
+          <ChevronLeft size={16} strokeWidth={2} aria-hidden="true" />
+        </IconBtn>
+        <span style={LABEL}>{isBreakStage ? 'Break until' : 'Start focus'}</span>
+        <span aria-hidden="true" style={{ width: 1, height: 22, background: 'var(--halo-border)', flexShrink: 0 }} />
+        {isBreakStage ? (
+          <>
+            <HoldBtn label="10 minutes" onCommit={() => { setView('row'); onStartBreak?.(Date.now() + 10 * 60_000); }} />
+            <HoldBtn label="15 minutes" onCommit={() => { setView('row'); onStartBreak?.(Date.now() + 15 * 60_000); }} />
+            <HoldBtn label="30 minutes" onCommit={() => { setView('row'); onStartBreak?.(Date.now() + 30 * 60_000); }} />
+          </>
+        ) : (
+          <>
+            <HoldBtn label="25 minutes" onCommit={() => { setView('row'); onStartFocus?.(25 * 60); }} />
+            <HoldBtn label="50 minutes" onCommit={() => { setView('row'); onStartFocus?.(50 * 60); }} />
+            <HoldBtn label="Open" onCommit={() => { setView('row'); onStartFocus?.(0); }} />
+            <span aria-hidden="true" style={{ width: 1, height: 22, background: 'var(--halo-border)', flexShrink: 0 }} />
+            <button
+              type="button"
+              onClick={() => setView('break-set')}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, height: 28,
+                padding: '0 10px', border: '1px solid var(--halo-border)', borderRadius: 999,
+                background: 'transparent', color: 'var(--halo-text)', cursor: 'pointer',
+                fontSize: 'var(--halo-t-value, 13px)',
+              }}
+              title="Start a break instead"
+            >
+              <Coffee size={11} strokeWidth={2} aria-hidden="true" />
+              Break
+            </button>
+          </>
+        )}
+        <span aria-hidden="true" style={{ flex: 1 }} />
+        <IconBtn label="Close" onClick={() => setView('row')}>
           <X size={16} strokeWidth={2} aria-hidden="true" />
         </IconBtn>
       </div>
@@ -501,7 +608,7 @@ export const FocusPageRow = memo(function FocusPageRow({
       )}
 
       {/* THE CONTROLS BELONG TO THE STOPWATCH. During a session they do not exist. */}
-      {!session && (
+      {!session && !breakLive && (
         <>
           <IconBtn label="Reset timer" onClick={onReset}>
             <RotateCcw size={13} strokeWidth={2} aria-hidden="true" />
@@ -513,15 +620,122 @@ export const FocusPageRow = memo(function FocusPageRow({
           >
             {snapshot.paused ? <Play size={13} strokeWidth={2} aria-hidden="true" /> : <Pause size={13} strokeWidth={2} aria-hidden="true" />}
           </IconBtn>
+          {/* N1 — the third control. Hold-to-commit lives INSIDE the editor, not here; this
+           * only opens it, so a plain click is honest. */}
+          {onStartFocus && (
+            <IconBtn label="Start focus or break" onClick={() => setView('start')}>
+              <Target size={13} strokeWidth={2} aria-hidden="true" />
+            </IconBtn>
+          )}
         </>
       )}
     </div>
   );
 });
 
+/* HOLD-BTN — the scout-picked `@kokonutui/hold-button` pattern, re-skinned to the island's
+ * tokens. The fill tracks the hold (rAF, transform-only: scaleX on a hairline layer), drains
+ * back on early release, and commits at HOLD_MS. Under prefers-reduced-motion a plain click
+ * commits — a hold gate that cannot animate must not become a trap. Keyboard commits on
+ * Enter/Space (no hold required), which is also the accessible path. */
+const HOLD_MS = 600;
+const HOLD_REDUCE =
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function HoldBtn({ label, onCommit }: { label: string; onCommit: () => void }) {
+  const fillRef = useRef<HTMLSpanElement | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const t0Ref = useRef(0);
+  const doneRef = useRef(false);
+
+  const setFill = (frac: number): void => {
+    if (fillRef.current) fillRef.current.style.transform = `scaleX(${frac})`;
+  };
+  const stopRaf = (): void => {
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+  };
+
+  const tick = (): void => {
+    const frac = Math.min(1, (Date.now() - t0Ref.current) / HOLD_MS);
+    setFill(frac);
+    if (frac >= 1) {
+      doneRef.current = true;
+      stopRaf();
+      onCommit();
+      return;
+    }
+    rafRef.current = requestAnimationFrame(tick);
+  };
+
+  const onDown = (e: ReactPointerEvent<HTMLButtonElement>): void => {
+    if (doneRef.current) return;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    t0Ref.current = Date.now();
+    tick();
+  };
+  const onUp = (): void => {
+    if (doneRef.current) { doneRef.current = false; return; }
+    /* Early release: drain the fill back instead of freezing it mid-charge. */
+    stopRaf();
+    if (fillRef.current) {
+      fillRef.current.style.transition = 'transform 150ms ease-out';
+      setFill(0);
+      window.setTimeout(() => {
+        if (fillRef.current) fillRef.current.style.transition = '';
+      }, 160);
+    }
+  };
+  const commitNow = (): void => {
+    doneRef.current = true;
+    setFill(1);
+    onCommit();
+  };
+
+  return (
+    <button
+      type="button"
+      title={`Hold to start ${label.toLowerCase()}`}
+      onPointerDown={(e) => { if (HOLD_REDUCE) commitNow(); else onDown(e); }}
+      onPointerUp={onUp}
+      onPointerCancel={onUp}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); commitNow(); }
+      }}
+      style={{
+        position: 'relative',
+        height: 28,
+        padding: '0 12px',
+        border: '1px solid var(--halo-border)',
+        borderRadius: 999,
+        background: 'transparent',
+        color: 'var(--halo-text)',
+        cursor: 'pointer',
+        fontSize: 'var(--halo-t-value, 13px)',
+        overflow: 'hidden',
+      }}
+    >
+      <span
+        ref={fillRef}
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'var(--halo-accent-dim)',
+          transform: 'scaleX(0)',
+          transformOrigin: 'left center',
+          pointerEvents: 'none',
+        }}
+      />
+      <span style={{ position: 'relative' }}>{label}</span>
+    </button>
+  );
+}
+
 /** Small calendar glyph for the `For` block — drawn locally so this file does not import a whole
- *  icon set for one 12px shape, and so it matches the 2px stroke of its neighbours. */
-function CalendarGlyph() {
+ *  icon set for one 12px shape, and so it matches the 2px stroke of its neighbours. */function CalendarGlyph() {
   return (
     <svg
       width={12}

@@ -86,6 +86,9 @@ export type ActivityKind =
    *                 as live context ahead of the plain running stopwatch. */
   | 'external'
   | 'nextBlock'
+  /* HALO_FIT rank 3 — the "back at" promise. Live state; the countdown lives in the
+   * island, main only stores + broadcasts the window (halo:break / halo:get-break). */
+  | 'break'
   /* HALO spec section 6 compact kinds (HALO_STATES.html board 1). */
   | 'website'
   | 'private'
@@ -267,6 +270,15 @@ export interface NextBlockPayload {
   startsAtMs: number;
   endsAtMs: number;
   isNow: boolean;
+}
+
+/**
+ * `break` — N2's running break. The island owns the countdown; main stores
+ * `untilMs` and broadcasts it so every window honors the same promise.
+ */
+export interface BreakPayload {
+  /** epoch ms the break ends. */
+  untilMs: number;
 }
 
 /** `focus` — no producer exists yet; shape per the RESULT's countdown spec. */
