@@ -45,6 +45,13 @@ const VAULT_FACTS = [
 type LayerId = "renderer" | "main" | "sqlite" | "disk";
 type LayerSelection = LayerId | "connections";
 
+// explosion debris: ten hairline shards radiating from the stack center
+const DEBRIS = Array.from({ length: 10 }, (_, i) => ({
+  a: i * 36, // radial angle
+  delay: (i % 2) * 0.05, // alternating stagger
+  len: i % 2 ? 16 : 24, // alternating shard length
+}));
+
 const REST_SEP = 0.18;
 const LAYERS_VB_W = 400; // the stage is 400 figure units wide (GAP4, shared with dispatchPointer)
 
@@ -304,6 +311,60 @@ function LayersStack({
           }}
         />
       )}
+      {/* second shockwave — faster and tighter, right behind the first */}
+      {!rm && (
+        <motion.div
+          aria-hidden="true"
+          initial={{ opacity: 0.5, scale: 0.25 }}
+          animate={{ opacity: 0, scale: 1.5 }}
+          transition={{ duration: 0.5, delay: 0.06, ease: [0.16, 1, 0.3, 1] }}
+          style={{
+            position: "absolute",
+            top: 142,
+            left: "50%",
+            width: 220,
+            height: 220,
+            marginLeft: -110,
+            marginTop: -110,
+            borderRadius: 999,
+            border: "1px solid rgba(255,255,255,0.6)",
+            pointerEvents: "none",
+          }}
+        />
+      )}
+      {/* debris — ten hairline shards radiating from the stack center.
+          Each wrapper holds a radial ANGLE; the inner shard travels outward
+          along that angle (translateY in the rotated frame). Lines, not
+          light: LAMINAR debris is a hairline, never a glow. */}
+      {!rm &&
+        DEBRIS.map((d, i) => (
+          <div
+            key={`debris-${i}`}
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              top: 142,
+              left: "50%",
+              width: 0,
+              height: 0,
+              transform: `rotate(${d.a}deg)`,
+              pointerEvents: "none",
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0.9, y: -34 }}
+              animate={{ opacity: 0, y: -168 }}
+              transition={{ duration: 0.78, delay: 0.1 + d.delay, ease: [0.16, 1, 0.3, 1] }}
+              style={{
+                position: "absolute",
+                width: 2,
+                height: d.len,
+                marginLeft: -1,
+                background: "rgba(244,244,245,0.7)",
+              }}
+            />
+          </div>
+        ))}
       {/* the four layers — native buttons in a group, NOT a nested tablist (L2) */}
       <div
         role="group"
@@ -323,14 +384,14 @@ function LayersStack({
           return (
             <motion.div
               key={id}
-              // the burst: each plate starts at the MIRRORED slot (±93/±31px
-              // travel) at scale .55 — the stack expands outward from its
-              // center, plates crossing through it, then landing on their
-              // rest slots. The inner fan transform is untouched; this wrapper
-              // only carries the entrance. Staggered top→bottom; rm static.
-              initial={rm ? false : { opacity: 0, scale: 0.55, y: -(i - 1.5) * PLATE_PITCH }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ duration: 0.72, delay: 0.1 + i * 0.07, ease: [0.16, 1, 0.3, 1] }}
+              // the burst: each plate TUMBLES out of the stack center — it
+              // starts at the mirrored slot (±93/±31px travel), tilted ±12°
+              // and scaled .3, then flies outward to its rest slot. The inner
+              // fan transform is untouched; this wrapper only carries the
+              // entrance. Staggered top→bottom; rm static.
+              initial={rm ? false : { opacity: 0, scale: 0.3, rotate: i % 2 ? 12 : -12, y: -(i - 1.5) * PLATE_PITCH }}
+              animate={{ opacity: 1, scale: 1, rotate: 0, y: 0 }}
+              transition={{ duration: 0.9, delay: 0.1 + i * 0.09, ease: [0.16, 1, 0.3, 1] }}
             >
               <div
                 style={{
@@ -865,9 +926,9 @@ function layersSweep(reverse = false): Pt[] {
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// §7b runtime stamp — proves the v9.1 bundle is actually served (module scope:
+// §7b runtime stamp — proves the v10.0 bundle is actually served (module scope:
 // logs once per load, not per render).
-console.log("%c[FigureInstrument] v9.1 loaded", "color: #fbbf24; font-weight: bold");
+console.log("%c[FigureInstrument] v10.0 loaded", "color: #fbbf24; font-weight: bold");
 
 function FigureInstrument({ rm }: { rm: boolean }) {
   const [mode, setMode] = useState<"vault" | "layers">("vault");

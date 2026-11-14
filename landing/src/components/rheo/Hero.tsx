@@ -17,12 +17,22 @@ export default function Hero() {
           Theme vars set to LAMINAR zinc so it rises out of the page floor.
           play is NOT set (loop ban). intensity defaults to 0.5. */}
       {/* Dayfield — 81 pillars, each one a slice of a real day. TRUE tier.
-          Bottom band: own row, not overlay. Fixes aria-hidden + pointer-events-auto bug. */}
+          Bottom band (its documented position): pinned to the section's bottom
+          edge, OUT of flow — the foreground content centers against the full
+          viewport, not the space left above an in-flow band. aria-hidden +
+          pointer-events:none keep the overlay safe. */}
       <div
         aria-hidden
         data-motion="hero-dayfield"
-        className="mt-12"
-        style={{ height: 120, width: "100%", opacity: 0.8, pointerEvents: "none" }}
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 120,
+          opacity: 0.8,
+          pointerEvents: "none",
+        }}
       >
         <Dayfield label="Eighty-one pillars, each one a slice of a real day" />
       </div>

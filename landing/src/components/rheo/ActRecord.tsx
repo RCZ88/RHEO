@@ -167,9 +167,9 @@ export default function ActRecord() {
           {/* headline — the fixed frame (V1 pairing) */}
           <h2
             className="display-h2 ar-h2 mt-3"
-            style={{ color: "#f4f4f5", textTransform: "none", fontWeight: 500 }}
+            style={{ color: "#f4f4f5", fontWeight: 500 }}
           >
-            a day, replayable
+            A DAY, REPLAYABLE.
           </h2>
 
           {/* chart panel — full container width */}
