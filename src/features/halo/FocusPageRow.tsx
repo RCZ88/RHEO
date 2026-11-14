@@ -338,7 +338,7 @@ export const FocusPageRow = memo(function FocusPageRow({
       <div
         className="halo-row-swap"
         data-halo-focus-row={isBreakStage ? 'break-set' : 'start'}
-        style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', minWidth: 0 }}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minWidth: 0 }}
         onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
           if (e.key === 'Escape') setView('row');
         }}
@@ -353,16 +353,15 @@ export const FocusPageRow = memo(function FocusPageRow({
         <span aria-hidden="true" style={{ width: 1, height: 22, background: 'var(--halo-border)', flexShrink: 0 }} />
         {isBreakStage ? (
           <>
-            <HoldBtn label="10 minutes" onCommit={() => { setView('row'); onStartBreak?.(Date.now() + 10 * 60_000); }} />
-            <HoldBtn label="15 minutes" onCommit={() => { setView('row'); onStartBreak?.(Date.now() + 15 * 60_000); }} />
-            <HoldBtn label="30 minutes" onCommit={() => { setView('row'); onStartBreak?.(Date.now() + 30 * 60_000); }} />
+            <HoldBtn label="10m" title="Hold to start a 10 minute break" onCommit={() => { setView('row'); onStartBreak?.(Date.now() + 10 * 60_000); }} />
+            <HoldBtn label="15m" title="Hold to start a 15 minute break" onCommit={() => { setView('row'); onStartBreak?.(Date.now() + 15 * 60_000); }} />
+            <HoldBtn label="30m" title="Hold to start a 30 minute break" onCommit={() => { setView('row'); onStartBreak?.(Date.now() + 30 * 60_000); }} />
           </>
         ) : (
           <>
-            <HoldBtn label="25 minutes" onCommit={() => { setView('row'); onStartFocus?.(25 * 60); }} />
-            <HoldBtn label="50 minutes" onCommit={() => { setView('row'); onStartFocus?.(50 * 60); }} />
-            <HoldBtn label="Open" onCommit={() => { setView('row'); onStartFocus?.(0); }} />
-            <span aria-hidden="true" style={{ width: 1, height: 22, background: 'var(--halo-border)', flexShrink: 0 }} />
+            <HoldBtn label="25m" title="Hold to start a 25 minute focus" onCommit={() => { setView('row'); onStartFocus?.(25 * 60); }} />
+            <HoldBtn label="50m" title="Hold to start a 50 minute focus" onCommit={() => { setView('row'); onStartFocus?.(50 * 60); }} />
+            <HoldBtn label="Open" title="Hold to start an open-ended focus" onCommit={() => { setView('row'); onStartFocus?.(0); }} />
             <button
               type="button"
               onClick={() => setView('break-set')}
@@ -380,9 +379,6 @@ export const FocusPageRow = memo(function FocusPageRow({
           </>
         )}
         <span aria-hidden="true" style={{ flex: 1 }} />
-        <IconBtn label="Close" onClick={() => setView('row')}>
-          <X size={16} strokeWidth={2} aria-hidden="true" />
-        </IconBtn>
       </div>
     );
   }
@@ -562,11 +558,11 @@ export const FocusPageRow = memo(function FocusPageRow({
       {!session && away && (
         <>
           <span aria-hidden="true" style={DIVIDER} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
             <span style={LABEL}>Away</span>
-            <span style={{ ...VALUE, color: 'var(--halo-away)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Coffee size={12} strokeWidth={2} aria-hidden="true" />
-              {formatAway(awayMs ?? 0)}
+            <span style={{ ...VALUE, color: 'var(--halo-away)', display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <Coffee size={12} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0 }} />
+              <span className="truncate">{formatAway(awayMs ?? 0)}</span>
             </span>
           </div>
         </>
@@ -644,7 +640,7 @@ const HOLD_REDUCE =
   typeof window.matchMedia === 'function' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function HoldBtn({ label, onCommit }: { label: string; onCommit: () => void }) {
+function HoldBtn({ label, title, onCommit }: { label: string; title?: string; onCommit: () => void }) {
   const fillRef = useRef<HTMLSpanElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const t0Ref = useRef(0);
@@ -697,7 +693,7 @@ function HoldBtn({ label, onCommit }: { label: string; onCommit: () => void }) {
   return (
     <button
       type="button"
-      title={`Hold to start ${label.toLowerCase()}`}
+      title={title ?? `Hold to start ${label.toLowerCase()}`}
       onPointerDown={(e) => { if (HOLD_REDUCE) commitNow(); else onDown(e); }}
       onPointerUp={onUp}
       onPointerCancel={onUp}
