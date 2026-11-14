@@ -1,4 +1,9 @@
-/* Boot overlay — the "opening ledger" splash.
+/* Boot overlay — C · DEPARTURES (2026-11-14, CZ-approved prototype).
+ *
+ * The crew's board flips over: split-flap RHEO lands letter by letter, four
+ * boot-stage rows light up over a canvas lamp lattice that waves ONCE per
+ * stage advance (and rests at ready), a real clock ticks top-right, and a
+ * 2px sunken track carries the departure percentage.
  *
  * ── WHY THIS FILE USES --ws-* AND NOT --text-hi / --text-mid ───────────────
  * This file previously read `--text-hi`, `--text-mid`, `--hairline`,
@@ -16,10 +21,24 @@
  * real `html.light` branch in src/index.css. Same visual language, one token
  * family, and it now follows the theme.
  *
+ * Text/dot colours are LOCAL --boot-* variables defined on .boot-board with
+ * dark literals and an explicit `html.light` re-declaration block below — the
+ * same discipline index.html uses for #df-startup. They must not fall back
+ * silently to a dark-only token family, and they must be auditable in one
+ * place.
+ *
  * LAMINAR: light depth comes from HAIRLINES, never shadow (§11), so the light
- * branch drops the two shadows rather than recolouring them. The accent is the
- * single signal hue and is read from `--ws-accent` so a user-chosen accent
- * recolours the ruler and the progress fill too. */
+ * branch drops the glow rather than recolouring it. The ONE signal hue is read
+ * from `--ws-accent` (cyan at boot in dark, deep teal on paper in light); the
+ * canvas reads the same variable at runtime, so a custom accent recolours the
+ * dots, the dots' glow and the track fill together.
+ *
+ * Type: JetBrains Mono only — the departures board is a machine surface, and
+ * one mono face keeps the identity legible (≤2 fonts per view, here 1).
+ *
+ * Motion: L2, one easing (--boot-ease), no springs. Rows/dots/track/fade are
+ * all state transitions; the lattice wave is progress, not decoration; the
+ * only loop is the clock, which is functional. */
 
 .boot-overlay {
   position: fixed;
@@ -33,122 +52,263 @@
   pointer-events: auto;
 }
 
-.boot-glass {
+/* The departures board itself — 520×320, exactly the splash window's size,
+ * so Stage 1 and Stage 2 read as the same physical object. */
+.boot-board {
+  /* dark literals — the ramp this screen is typeset against */
+  --boot-ink: #fafafa;
+  --boot-dim: #a1a1aa;
+  --boot-faint: #52525b;
+  --boot-meta: #3f3f46;
+  --boot-tile: rgba(255, 255, 255, 0.045);
+  --boot-tile-edge: rgba(255, 255, 255, 0.06);
+  --boot-seam: rgba(0, 0, 0, 0.55);
+  --boot-track: #070708;
+  --boot-track-inset: rgba(0, 0, 0, 0.6);
+  --boot-ease: cubic-bezier(0.19, 1, 0.22, 1);
+
   width: min(520px, calc(100vw - 48px));
-  padding: 26px 24px 20px;
-  border-radius: var(--radius-card, 12px);
-  border: 1px solid var(--color-border);
+  height: 320px;
+  position: relative;
+  overflow: hidden;
   background: var(--color-card);
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.boot-head { display: flex; flex-direction: column; gap: 6px; }
-
-.boot-wordmark {
-  font-family: var(--font-display, 'Space Grotesk'), sans-serif;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.boot-status {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
   font-family: var(--font-mono, 'JetBrains Mono'), monospace;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
-  min-height: 1em;
 }
 
-.boot-ruler { position: relative; height: 44px; }
-
-.boot-ticks {
+/* ── lattice lamp field (canvas, behind everything) ── */
+.boot-lattice {
   position: absolute;
-  inset: auto 0 14px 0;
-  height: 18px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── split-flap wordmark ──
+ * Mechanically honest: each tile flips FORWARD through the drum charset,
+ * never crossfading. The .boot-flap elements are driven imperatively by
+ * BootOverlay (transform resets + forced reflow per half-rotation). */
+.boot-flaps {
+  position: absolute;
+  left: 36px;
+  top: 42px;
   display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
+  gap: 4px;
+  perspective: 160px;
 }
-
-/* A 1px tick is a HAIRLINE, so it uses the hairline ramp rather than an
-   arbitrary alpha. `--ws-border` is 0.10 on paper and 0.10 on the dark
-   field, i.e. it tracks the theme's own edge weight. */
-.boot-tick {
-  width: 1px;
-  height: 8px;
-  background: var(--ws-border);
+.boot-tile {
+  position: relative;
+  width: 28px;
+  height: 44px;
+  background: var(--boot-tile);
+  border-radius: 4px; /* 0.12em @34px */
+  box-shadow: inset 0 0 0 1px var(--boot-tile-edge);
 }
-.boot-tick:nth-child(4n + 1) { height: 14px; }
-
-/* The "now" tick is the ONE signal element on the screen, so it takes the
-   accent. The glow is `color-mix` against the accent rather than a hardcoded
-   cyan, so it follows a custom accent. */
-.boot-tick--now {
-  width: 2px;
-  height: 14px;
-  background: var(--ws-accent);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--ws-accent) 55%, transparent);
-  animation: boot-now-pulse 2.2s var(--ease-out-expo, ease-out) 0.9s infinite;
-}
-
-.boot-sweep {
+.boot-half,
+.boot-flap {
   position: absolute;
   left: 0;
-  bottom: 14px;
-  height: 1px;
-  width: 0;
-  background: linear-gradient(90deg, transparent, var(--ws-accent), transparent);
-}
-
-.boot-numerals {
-  position: absolute;
-  inset: auto 0 0 0;
-  display: flex;
-  justify-content: space-between;
-  font-family: var(--font-mono, 'JetBrains Mono'), monospace;
-  font-size: 10px;
-  color: var(--text-faint);
-}
-
-/* The track is recessed, so it is the sunken surface — not a white alpha. */
-.boot-progress {
-  height: 2px;
-  border-radius: 2px;
+  width: 100%;
+  height: 50%;
   overflow: hidden;
-  background: var(--ws-surface-sunken, var(--ws-surface));
+  background: var(--boot-tile);
+}
+.boot-flap { display: none; }
+.boot-half--top, .boot-flap--top { top: 0; border-radius: 4px 4px 0 0; }
+.boot-half--bot, .boot-flap--bot { bottom: 0; border-radius: 0 0 4px 4px; }
+.boot-half span,
+.boot-flap span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 200%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--boot-ink);
+}
+.boot-half--top span, .boot-flap--top span { top: 0; }
+.boot-half--bot span, .boot-flap--bot span { bottom: 0; }
+.boot-flap--top {
+  transform-origin: center bottom;
+  backface-visibility: hidden;
+  box-shadow: inset 0 -1px 0 var(--boot-seam);
+}
+.boot-flap--bot {
+  transform-origin: center top;
+  backface-visibility: hidden;
+  box-shadow: inset 0 1px 0 var(--boot-seam);
+}
+/* the seam between halves */
+.boot-seam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--boot-seam);
+  z-index: 3;
 }
 
-.boot-progress-fill {
+/* ── clock (functional — the board's clock; the ONE loop that survives) ── */
+.boot-clock {
+  position: absolute;
+  right: 36px;
+  top: 52px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--boot-dim);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.boot-clock small {
   display: block;
-  height: 100%;
-  width: 0;
-  background: linear-gradient(90deg,
-    var(--ws-accent),
-    color-mix(in srgb, var(--ws-accent) 40%, transparent));
+  margin-top: 4px;
+  font-size: 8px;
+  letter-spacing: 0.22em;
+  color: var(--boot-faint);
 }
 
-@keyframes boot-now-pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.55; }
+/* ── stage rows ──
+ * A real departure list: left ledger + right-aligned tabular metas. State
+ * classes are set by BootOverlay from the stage ladder / `rheo:boot-ready` —
+ * the board never claims readiness the app hasn't reported. */
+.boot-rows {
+  position: absolute;
+  left: 36px;
+  right: 36px;
+  top: 132px;
+}
+.boot-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 27px;
+  font-size: 12px;
+  color: var(--boot-faint);
+  opacity: 0;
+  transform: translateY(5px);
+  transition:
+    opacity 300ms var(--boot-ease),
+    transform 300ms var(--boot-ease),
+    color 260ms var(--boot-ease);
+}
+.boot-row.boot-row--in { opacity: 1; transform: none; }
+.boot-row-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: transparent;
+  transition:
+    background 260ms var(--boot-ease),
+    border-color 260ms var(--boot-ease),
+    box-shadow 260ms var(--boot-ease);
+}
+.boot-row--active { color: var(--boot-ink); }
+.boot-row--active .boot-row-dot {
+  border-color: var(--ws-accent);
+  background: color-mix(in srgb, var(--ws-accent) 35%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--ws-accent) 50%, transparent);
+}
+.boot-row--done { color: var(--boot-dim); }
+.boot-row--done .boot-row-dot {
+  border-color: var(--ws-accent);
+  background: var(--ws-accent);
+  box-shadow: none;
+}
+.boot-row-meta {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--boot-meta);
+  opacity: 0;
+  transition: opacity 260ms var(--boot-ease);
+  font-variant-numeric: tabular-nums;
+}
+.boot-row--active .boot-row-meta,
+.boot-row--done .boot-row-meta { opacity: 1; }
+
+/* screen-reader live line — the rows are aria-hidden; this carries the stage */
+.boot-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── bottom progress track ──
+ * The track is recessed, so it is the sunken surface — not a white alpha.
+ * The fill is the ONE signal element on the board and takes the accent. */
+.boot-track {
+  position: absolute;
+  left: 36px;
+  right: 36px;
+  bottom: 26px;
+  height: 2px;
+  background: var(--boot-track);
+  border-radius: 1px;
+  box-shadow: inset 0 1px 1px var(--boot-track-inset);
+}
+.boot-tfill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: var(--ws-accent);
+  border-radius: 1px;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--ws-accent) 35%, transparent);
+  transition: width 900ms var(--boot-ease);
+}
+.boot-pct {
+  position: absolute;
+  right: 36px;
+  bottom: 33px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--boot-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .boot-tick--now { animation: none; }
+  .boot-row,
+  .boot-row-dot,
+  .boot-row-meta,
+  .boot-tfill {
+    transition: none !important;
+  }
 }
 
 /* ── LIGHT ─────────────────────────────────────────────────────────────────
-   Declared explicitly rather than relying on the `var()` fallbacks above.
-   Reason: `--ws-surface-sunken` and `--color-card` already differ per theme,
-   but the DARK theme previously carried a drop shadow plus an inset top
-   highlight that have no light equivalent (LAMINAR §11 — a light surface has
-   no ambient occlusion to sell, so a shadow there is a lie). Re-declaring the
-   block keeps that decision visible instead of hiding it in a fallback.
-   Measured on paper #f5f2ec: wordmark 16.9:1, status 7.4:1, numerals 4.7:1. */
-html.light .boot-glass {
-  border-color: var(--ws-border);
-  background: var(--color-card);
-  box-shadow: none;
+   Declared explicitly rather than relying on `var()` fallbacks. Measured law
+   (design.md §11): light is WARM PAPER, depth comes from HAIRLINES never
+   shadow, and the ONE signal hue is deep teal — which is what --ws-accent
+   resolves to on paper, so the dots/dots' glow/track follow it without a
+   second declaration here. No glow shadows on paper. */
+html.light .boot-board {
+  --boot-ink: #1c1917;
+  --boot-dim: #57534e;
+  --boot-faint: #78716c;
+  --boot-meta: #a8a29e;
+  --boot-tile: rgba(28, 25, 23, 0.05);
+  --boot-tile-edge: rgba(28, 25, 23, 0.1);
+  --boot-seam: rgba(28, 25, 23, 0.28);
+  --boot-track: rgba(28, 25, 23, 0.1);
+  --boot-track-inset: rgba(28, 25, 23, 0.18);
 }
+html.light .boot-row-dot { border-color: rgba(28, 25, 23, 0.2); }
+html.light .boot-row--active .boot-row-dot,
+html.light .boot-row--done .boot-row-dot { box-shadow: none; }
+html.light .boot-tfill { box-shadow: none; }
 html.light .boot-overlay { background: var(--ws-surface); }

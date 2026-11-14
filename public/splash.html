@@ -6,17 +6,34 @@
 <title>RHEO</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
-  /* ===== R-10 Boot Splash — Meridian Wake (Concept A) ===== */
-  /* Single LAMINAR easing, transform/opacity ONLY, one-shot, no loop */
+  /* ── R-10 Boot Splash — C · DEPARTURES (Stage 1) ────────────────────────
+   * The window IS the board: split-flap RHEO drums forward through the
+   * charset (mechanically honest, never crossfaded), a real clock ticks
+   * top-right, the lamp lattice sweeps once as the board powers on, and the
+   * 2px sunken track fills to 100. The full four-row departure list is
+   * Stage 2's (BootOverlay) — Stage 1 lives at most ~1.4s (main.ts closes
+   * the splash at 1400ms), so it shows the sign turning on, not the list.
+   *
+   * Identity: field #09090b · signal cyan #06b6d4 · JetBrains Mono only.
+   * Motion: L2 · expo easing · no springs · reduced-motion = static final.
+   * Contract kept verbatim: splashAPI.getBootAnimationConfig / onReplay /
+   * sendComplete. */
 
   :root {
-    --splash-field: #09090b;
-    --splash-hairline: rgba(255,255,255,0.08);
-    --splash-mono: rgba(255,255,255,0.50);
-    --splash-caption: rgba(255,255,255,0.35);
-    --splash-now-tick: #ec4899;
+    --board-field: #09090b;
+    --board-hairline: rgba(255,255,255,0.08);
+    --board-ink: #fafafa;
+    --board-dim: #a1a1aa;
+    --board-faint: #52525b;
+    --board-tile: rgba(255,255,255,0.045);
+    --board-tile-edge: rgba(255,255,255,0.06);
+    --board-seam: rgba(0,0,0,0.55);
+    --board-track: #070708;
+    --board-track-inset: rgba(0,0,0,0.6);
+    --board-signal: #06b6d4;
+    --board-ease: cubic-bezier(0.19, 1, 0.22, 1);
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -24,313 +41,334 @@
   html, body {
     width: 100%; height: 100%;
     overflow: hidden;
-    background: var(--splash-field);
-    color: rgba(255,255,255,0.85);
-    font-family: 'Inter', sans-serif;
-  }
-
-  /* Full-screen field */
-  .splash-field {
-    position: fixed;
-    inset: 0;
-    background: var(--splash-field);
-  }
-
-  /* Ticks container — fixed height so children have room */
-  #ticks {
-    position: absolute;
-    left: 0; top: 0;
-    width: 100%; height: 100%;
-  }
-
-  .splash-tick {
-    position: absolute;
-    left: 28px;
-    width: 2px;
-    height: 8px;
-    background: var(--splash-hairline);
-    transform-origin: center;
-    opacity: 0;
-    transform: translateY(6px);
-    will-change: transform, opacity;
-  }
-
-  .splash-num {
-    position: absolute;
-    left: 40px;
+    background: var(--board-field);
     font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
+    color: var(--board-dim);
+  }
+
+  .board { position: absolute; inset: 0; }
+  /* the bezel — a 1px hairline ring defining the window's edge */
+  .board::after {
+    content: '';
+    position: absolute; inset: 0;
+    border: 1px solid var(--board-hairline);
+    pointer-events: none;
+  }
+
+  #field { position: absolute; inset: 0; }
+
+  /* ── split-flap wordmark ── */
+  .flaps {
+    position: absolute; left: 36px; top: 42px;
+    display: flex; gap: 4px;
+    perspective: 160px;
+  }
+  .tile {
+    position: relative; width: 28px; height: 44px;
+    background: var(--board-tile);
+    border-radius: 4px;                                  /* 0.12em @34px */
+    box-shadow: inset 0 0 0 1px var(--board-tile-edge);
+  }
+  .half, .flap {
+    position: absolute; left: 0; width: 100%; height: 50%;
+    overflow: hidden; background: var(--board-tile);
+  }
+  .flap { display: none; }
+  .half.top, .flap.fTop { top: 0; border-radius: 4px 4px 0 0; }
+  .half.bot, .flap.fBot { bottom: 0; border-radius: 0 0 4px 4px; }
+  .half span, .flap span {
+    position: absolute; left: 0; width: 100%; height: 200%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px; font-weight: 500; line-height: 1; color: var(--board-ink);
+  }
+  .half.top span, .flap.fTop span { top: 0; }
+  .half.bot span, .flap.fBot span { bottom: 0; }
+  .flap.fTop {
+    transform-origin: center bottom; backface-visibility: hidden;
+    box-shadow: inset 0 -1px 0 var(--board-seam);
+  }
+  .flap.fBot {
+    transform-origin: center top; backface-visibility: hidden;
+    box-shadow: inset 0 1px 0 var(--board-seam);
+  }
+  .seam {
+    position: absolute; left: 0; right: 0; top: 50%; height: 1px;
+    background: var(--board-seam); z-index: 3;
+  }
+
+  /* ── clock (functional — the ONE loop that survives) ── */
+  .clock {
+    position: absolute; right: 36px; top: 52px;
+    font-size: 11px; letter-spacing: 0.08em; color: var(--board-dim);
+    font-variant-numeric: tabular-nums; text-align: right;
+  }
+  .clock small {
+    display: block; margin-top: 4px; font-size: 8px; letter-spacing: 0.22em;
+    color: var(--board-faint);
+  }
+
+  /* ── bottom progress track ──
+   * Stage 1's fill is compressed (420ms) — the board only lives ~1.4s, so the
+   * 900ms Stage-2 fill would never finish. The mechanic constants (FLIP,
+   * STAGGER, the 864ms wave) stay verbatim; presentation timing adapts. */
+  .track {
+    position: absolute; left: 36px; right: 36px; bottom: 26px; height: 2px;
+    background: var(--board-track); border-radius: 1px;
+    box-shadow: inset 0 1px 1px var(--board-track-inset);
+  }
+  .tfill {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+    background: var(--board-signal); border-radius: 1px;
+    box-shadow: 0 0 10px rgba(6,182,212,0.35);
+    transition: width 420ms var(--board-ease);
+  }
+  .pct {
+    position: absolute; right: 36px; bottom: 33px;
+    font-size: 9px; letter-spacing: 0.08em; color: var(--board-faint);
     font-variant-numeric: tabular-nums;
-    color: var(--splash-mono);
-    letter-spacing: -0.02em;
-    opacity: 0;
-    transform: translateY(50%);
-    will-change: transform, opacity;
-  }
-
-  .splash-now {
-    position: absolute;
-    left: 28px;
-    width: 2px;
-    height: 8px;
-    background: var(--splash-now-tick);
-    opacity: 0;
-    transform-origin: center;
-    will-change: opacity;
-  }
-
-  .splash-now-dot {
-    position: absolute;
-    width: 4px; height: 4px;
-    border-radius: 50%;
-    background: var(--splash-now-tick);
-    opacity: 0;
-    box-shadow: 0 0 8px rgba(236,72,153,0.08);
-    will-change: opacity;
-  }
-
-  .splash-sweep {
-    position: absolute;
-    left: 28px;
-    top: 50%;
-    width: 464px;
-    height: 1px;
-    background: var(--splash-hairline);
-    transform-origin: left center;
-    transform: scaleX(0);
-    will-change: transform;
-  }
-
-  .splash-logo {
-    position: absolute;
-    left: 50%; top: 50%;
-    transform: translate(-50%, -50%) scale(0.9);
-    opacity: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    will-change: opacity, transform;
-  }
-
-  .splash-wordmark {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 28px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    color: #fafafa;
-    line-height: 1;
-    white-space: nowrap;
-  }
-
-  .splash-caption {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    color: var(--splash-caption);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    white-space: nowrap;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .splash-tick, .splash-num, .splash-now, .splash-now-dot,
-    .splash-sweep, .splash-logo {
-      opacity: 1;
-      transform: none;
-      animation: none !important;
-    }
-    .splash-sweep { transform: scaleX(1); }
-    .splash-logo { transform: translate(-50%, -50%) scale(1); }
-    .splash-tick { opacity: var(--splash-mono); }
-    .splash-num { opacity: var(--splash-mono); }
-    body { animation: splash-rm-fade 140ms ease-out forwards; }
-  }
-  @keyframes splash-rm-fade {
-    from { opacity: 0; }
-    to   { opacity: 1; }
+    .tfill { transition: none !important; }
   }
 </style>
 </head>
 <body>
-<div class="splash-field" aria-hidden="true"></div>
-<div id="ticks" aria-hidden="true"></div>
-
-<div class="splash-num" id="num-00" style="top:40px">00</div>
-<div class="splash-num" id="num-06" style="top:100px">06</div>
-<div class="splash-num" id="num-12" style="top:160px">12</div>
-<div class="splash-num" id="num-18" style="top:220px">18</div>
-<div class="splash-num" id="num-24" style="top:280px">24</div>
-
-<div class="splash-now" id="now-tick" style="top:160px"></div>
-<div class="splash-now-dot" id="now-dot" style="top:158px;left:27px"></div>
-
-<div class="splash-sweep" id="sweep" aria-hidden="true"></div>
-
-<div class="splash-logo" id="logo" aria-hidden="true">
-  <span class="splash-wordmark">RHEO</span>
-  <span class="splash-caption">Productivity Tracker</span>
+<div class="board" aria-hidden="true">
+  <canvas id="field" width="520" height="320"></canvas>
+  <div class="flaps" id="flaps"></div>
+  <div class="clock"><span id="clock">--:--:--</span><small>local</small></div>
+  <div class="pct" id="pct">00%</div>
+  <div class="track"><div class="tfill" id="tfill"></div></div>
 </div>
 
 <script>
 (function () {
   'use strict';
 
-  // ── DOM refs ──
-  var FIELD = document.querySelector('.splash-field');
-  var TICKS = document.getElementById('ticks');
-  var NUMS  = ['num-00','num-06','num-12','num-18','num-24'].map(function (id) {
-    return document.getElementById(id);
-  });
-  var NOW_TICK = document.getElementById('now-tick');
-  var NOW_DOT  = document.getElementById('now-dot');
-  var SWEEP    = document.getElementById('sweep');
-  var LOGO     = document.getElementById('logo');
+  var flapsEl = document.getElementById('flaps');
+  var clockEl = document.getElementById('clock');
+  var tfill = document.getElementById('tfill');
+  var pctEl = document.getElementById('pct');
+  var canvas = document.getElementById('field');
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // ── Build 24 ruler ticks ──
-  var tickFrag = document.createDocumentFragment();
-  for (var i = 0; i < 24; i++) {
-    var tick = document.createElement('div');
-    tick.className = 'splash-tick';
-    tick.style.top = (40 + i * 10) + 'px';
-    tickFrag.appendChild(tick);
-  }
-  TICKS.appendChild(tickFrag);
-  var TICK_NODES = Array.prototype.slice.call(TICKS.querySelectorAll('.splash-tick'));
+  var CHARSET = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:.-/&!?';
+  var FLIP = 56;                 // ms per flap fall (kokonutui split-flap)
+  var FLIP_HALF = 28;            // one half-rotation = FLIP / 2
+  var STAGGER = 40;              // ms between tiles
+  var WORD = 'RHEO';
 
-  // ── Easing + state ──
-  var easeOut = function (t) { return 1 - Math.pow(1 - t, 3); };
-  var startTime = performance.now();
-  var animCompleteSent = false;
-  var warmStart = false;
+  var timers = [];
+  function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
+  function clearAll() { timers.forEach(clearTimeout); timers = []; }
 
-  function sendComplete() {
-    if (animCompleteSent) return;
-    animCompleteSent = true;
-    if (window.splashAPI && window.splashAPI.sendComplete) {
-      window.splashAPI.sendComplete();
+  /* ── split-flap mechanics (identical to Stage 2) ── */
+  var tiles = [];
+  function buildFlaps() {
+    flapsEl.innerHTML = '';
+    tiles = [];
+    for (var i = 0; i < WORD.length; i++) {
+      var tile = document.createElement('div');
+      tile.className = 'tile';
+      tile.innerHTML =
+        '<div class="half top"><span></span></div>' +
+        '<div class="half bot"><span></span></div>' +
+        '<div class="flap fTop"><span></span></div>' +
+        '<div class="flap fBot"><span></span></div>' +
+        '<div class="seam"></div>';
+      flapsEl.appendChild(tile);
+      tiles.push({
+        top: tile.querySelector('.half.top span'),
+        bot: tile.querySelector('.half.bot span'),
+        fTop: tile.querySelector('.flap.fTop'),
+        fBot: tile.querySelector('.flap.fBot'),
+        fTopS: tile.querySelector('.flap.fTop span'),
+        fBotS: tile.querySelector('.flap.fBot span'),
+        cur: ' '
+      });
     }
   }
 
-  // ── Animation loop ──
-  function tick(now) {
-    var elapsed = now - startTime;
-    if (warmStart) {
-      sequenceWarm(now, elapsed);
-      if (elapsed < 600) requestAnimationFrame(tick);
-      return;
-    }
-    sequenceFull(now, elapsed);
-    if (elapsed < 1500) requestAnimationFrame(tick);
+  function setStatic(t, ch) {
+    t.top.textContent = ch; t.bot.textContent = ch; t.cur = ch;
   }
 
-  function sequenceFull(now, elapsed) {
-    if (elapsed < 500) {
-      var tFrac = Math.min(elapsed / 500, 1);
-      for (var i = 0; i < TICK_NODES.length; i++) {
-        var tickStart = i * 12;
-        var local = Math.max(0, tFrac * 500 - tickStart);
-        var e = easeOut(Math.min(local / 80, 1));
-        TICK_NODES[i].style.opacity = e;
-        TICK_NODES[i].style.transform = 'translateY(' + (6 * (1 - e)) + 'px)';
+  function stepFlip(t, done) {
+    var next = CHARSET[(CHARSET.indexOf(t.cur) + 1) % CHARSET.length];
+    t.fTopS.textContent = t.cur;
+    t.fBotS.textContent = next;
+    t.fTop.style.transition = 'none'; t.fTop.style.transform = 'rotateX(0deg)';
+    t.fBot.style.transition = 'none'; t.fBot.style.transform = 'rotateX(90deg)';
+    void t.fTop.offsetWidth;
+    t.fTop.style.transition = 'transform ' + FLIP_HALF + 'ms linear'; t.fTop.style.transform = 'rotateX(-90deg)';
+    t.fBot.style.transition = 'transform ' + FLIP_HALF + 'ms linear'; t.fBot.style.transform = 'rotateX(0deg)';
+    setTimeout(function () {
+      setStatic(t, next);
+      t.fTop.style.display = 'none'; t.fBot.style.display = 'none';
+      if (t.cur !== done.target && done.steps > 1) {
+        done.steps--;
+        setTimeout(function () { stepFlip(t, done); }, FLIP - FLIP_HALF);
+      }
+    }, FLIP_HALF);
+  }
+
+  function runFlaps() {
+    for (var i = 0; i < tiles.length; i++) {
+      (function (t, i) {
+        var target = WORD[i];
+        var idx = CHARSET.indexOf(target);
+        var start = Math.max(0, idx - (6 + (i * 2) % 5));   // start a few chars before target
+        setStatic(t, CHARSET[start]);
+        var steps = idx - start;
+        if (steps <= 0) { setStatic(t, target); return; }
+        at(i * STAGGER, function () {
+          t.fTop.style.display = 'block';
+          t.fBot.style.display = 'block';
+          stepFlip(t, { target: target, steps: steps });
+        });
+      })(tiles[i], i);
+    }
+  }
+
+  function finishStaticFlaps() {
+    tiles.forEach(function (t, i) { setStatic(t, WORD[i]); });
+    tiles.forEach(function (t) {
+      t.fTop.style.display = 'none'; t.fBot.style.display = 'none';
+    });
+  }
+
+  /* ── lattice field (canvas) ── */
+  var ctx = canvas.getContext('2d');
+  var COLS = 40, ROWS = 24, PITCH = 13, CELL = 6, OFF = 3.5;
+  var idle = [];
+  var waves = [];
+  var rafId = 0, fieldRunning = false;
+
+  function setupCanvas() {
+    var dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    canvas.width = Math.round(520 * dpr);
+    canvas.height = Math.round(320 * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  setupCanvas();
+
+  function buildIdle() {
+    idle = [];
+    for (var i = 0; i < COLS * ROWS; i++) idle.push(0.05 + Math.random() * 0.05);
+  }
+
+  function drawField(now) {
+    ctx.clearRect(0, 0, 520, 320);
+    var fronts = [];
+    for (var w = waves.length - 1; w >= 0; w--) {
+      var k = (now - waves[w].t0) / 864;                     // lattice wave cycle
+      if (k >= 1) { waves.splice(w, 1); continue; }
+      var e = 1 - Math.pow(1 - k, 3);                        // expo-out
+      fronts.push(-20 + e * 560);
+    }
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        var x = c * PITCH + OFF, y = r * PITCH + OFF;
+        var a = idle[r * COLS + c];                          // seeded — never unset alpha
+        if (fronts.length) {
+          var glow = 0;
+          for (var f = 0; f < fronts.length; f++) {
+            var d = fronts[f] - x;
+            if (d > -16 && d < 260) {
+              glow += 0.55 * Math.exp(-Math.pow(d - 6, 2) / 648)   // leading crest
+                   + 0.20 * Math.exp(-Math.max(0, d) / 90);         // trailing decay
+            }
+          }
+          a = Math.min(0.85, a + glow);
+        }
+        if (a <= 0.02) continue;
+        ctx.globalAlpha = a;
+        if (a > 0.32) { ctx.shadowBlur = 8; ctx.shadowColor = 'rgba(6,182,212,0.8)'; }
+        else { ctx.shadowBlur = 0; }
+        ctx.fillStyle = '#06b6d4';
+        ctx.fillRect(x, y, CELL, CELL);
       }
     }
-    if (elapsed >= 350 && elapsed < 700) {
-      var nFrac = Math.min((elapsed - 350) / 350, 1);
-      var nE = easeOut(nFrac);
-      for (var j = 0; j < NUMS.length; j++) {
-        NUMS[j].style.opacity = nE;
-        NUMS[j].style.transform = 'translateY(' + (50 * (1 - nE)) + '%)';
-      }
-    }
-    if (elapsed >= 700 && elapsed < 900) {
-      var wFrac = Math.min((elapsed - 700) / 200, 1);
-      var wE = easeOut(wFrac);
-      NOW_TICK.style.opacity = wE;
-      NOW_DOT.style.opacity = wE;
-    } else if (elapsed >= 900) {
-      NOW_TICK.style.opacity = '1';
-      NOW_DOT.style.opacity = '1';
-    }
-    if (elapsed >= 850 && elapsed < 1250) {
-      var sFrac = Math.min((elapsed - 850) / 400, 1);
-      var sE = easeOut(sFrac);
-      SWEEP.style.transform = 'scaleX(' + sE + ')';
-    } else if (elapsed >= 1250) {
-      SWEEP.style.transform = 'scaleX(1)';
-    }
-    if (elapsed >= 850 && elapsed < 1250) {
-      var lFrac = Math.min((elapsed - 850) / 400, 1);
-      var lE = easeOut(lFrac);
-      LOGO.style.opacity = lE;
-      LOGO.style.transform = 'translate(-50%,-50%) scale(' + (0.9 + 0.1 * lE) + ')';
-    } else if (elapsed >= 1250) {
-      LOGO.style.opacity = '1';
-      LOGO.style.transform = 'translate(-50%,-50%) scale(1)';
-      sendComplete();
-    }
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+    if (waves.length) rafId = requestAnimationFrame(drawField);
+    else fieldRunning = false;
   }
 
-  function sequenceWarm(now, elapsed) {
-    if (elapsed < 400) {
-      var tFrac = Math.min(elapsed / 400, 1);
-      for (var i = 0; i < TICK_NODES.length; i++) {
-        var tickStart = i * 12;
-        var local = Math.max(0, tFrac * 400 - tickStart);
-        var e = easeOut(Math.min(local / 80, 1));
-        TICK_NODES[i].style.opacity = e;
-        TICK_NODES[i].style.transform = 'translateY(' + (6 * (1 - e)) + 'px)';
-      }
-    }
-    if (elapsed >= 350 && elapsed < 600) {
-      var lFrac = Math.min((elapsed - 350) / 250, 1);
-      var lE = easeOut(lFrac);
-      LOGO.style.opacity = lE;
-      LOGO.style.transform = 'translate(-50%,-50%) scale(' + (0.9 + 0.1 * lE) + ')';
-    } else if (elapsed >= 600) {
-      LOGO.style.opacity = '1';
-      LOGO.style.transform = 'translate(-50%,-50%) scale(1)';
-    }
+  function wave() {
+    waves.push({ t0: performance.now() });
+    if (!fieldRunning) { fieldRunning = true; rafId = requestAnimationFrame(drawField); }
   }
 
-  // ── Reduced motion ──
-  var rmMatch = window.matchMedia('(prefers-reduced-motion: reduce)');
-  function handleRM() {
-    FIELD.style.opacity = '0';
-    FIELD.style.animation = 'splash-rm-fade 140ms ease-out forwards';
-    for (var i = 0; i < TICK_NODES.length; i++) {
-      TICK_NODES[i].style.opacity = '0.5';
-      TICK_NODES[i].style.transform = 'none';
-    }
-    for (var j = 0; j < NUMS.length; j++) {
-      NUMS[j].style.opacity = '0.5';
-      NUMS[j].style.transform = 'none';
-    }
-    NOW_TICK.style.opacity = '1';
-    NOW_DOT.style.opacity = '1';
-    SWEEP.style.transform = 'scaleX(1)';
-    LOGO.style.opacity = '1';
-    LOGO.style.transform = 'translate(-50%,-50%) scale(1)';
+  function drawIdleField() {
+    buildIdle();
+    waves = []; fieldRunning = false;
+    cancelAnimationFrame(rafId);
+    drawField(performance.now());
+  }
+
+  /* ── clock (functional — always runs, even reduced-motion) ── */
+  function pad(n) { return ('0' + n).slice(-2); }
+  function tickClock() {
+    var d = new Date();
+    clockEl.textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+  setInterval(tickClock, 1000);
+
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+  function setProgress(p) {
+    tfill.style.width = p + '%';
+    pctEl.textContent = (p >= 100 ? '100' : pad2(p)) + '%';
+  }
+
+  var completed = false;
+  function sendComplete(delay) {
+    if (completed) return;
+    completed = true;
     setTimeout(function () {
       if (window.splashAPI && window.splashAPI.sendComplete) {
         window.splashAPI.sendComplete();
       }
-    }, 140);
+    }, delay);
   }
 
-  // ── Replay handler ──
+  /* final state: sign on, track full, field at rest */
+  function paintStatic() {
+    clearAll();
+    buildFlaps();
+    finishStaticFlaps();
+    setProgress(100);
+    drawIdleField();
+  }
+
+  /* ── the run ── */
+  function run() {
+    clearAll();
+    completed = false;
+    buildFlaps();
+    drawIdleField();
+    setProgress(0);
+
+    if (reduced) { paintStatic(); sendComplete(140); return; }
+
+    at(60, wave);                 // the power-on sweep (864ms → fully seen)
+    at(80, runFlaps);             // the sign flips on
+    at(750, function () { setProgress(100); });
+    at(1250, function () { drawIdleField(); sendComplete(0); });
+  }
+
   function startAnimation() {
-    startTime = performance.now();
-    animCompleteSent = false;
-    if (rmMatch.matches) { handleRM(); return; }
-    requestAnimationFrame(tick);
+    if (warmStart) { paintStatic(); sendComplete(700); return; }
+    run();
   }
 
   // ── Config load (async — getBootAnimationConfig returns a Promise) ──
+  var warmStart = false;
   function init() {
     if (window.splashAPI && window.splashAPI.getBootAnimationConfig) {
       window.splashAPI.getBootAnimationConfig().then(function (cfg) {
         if (cfg && typeof cfg === 'object') {
-          if (cfg.enabled === false) { document.body.style.opacity = '1'; return; }
+          if (cfg.enabled === false) { paintStatic(); return; }
           warmStart = !!cfg.warmStart;
         }
         startAnimation();
@@ -342,15 +380,23 @@
     }
   }
 
-  // ── Replay via splash preload IPC channel (ruling 3 — full IPC chain) ──
+  // ── Replay via splash preload IPC channel (contract kept verbatim) ──
   if (window.splashAPI && window.splashAPI.onReplay) {
     window.splashAPI.onReplay(function () {
+      completed = false;
+      warmStart = false;           // a replay is a full run, not a resume
       startAnimation();
     });
   }
 
-  // ── Boot ──
-  init();
+  // ── Boot (after the mono font is available so flap tiles measure true) ──
+  tickClock();
+  var started = false;
+  function start() { if (started) return; started = true; init(); }
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(start);
+    setTimeout(start, 700);
+  } else { start(); }
 })();
 </script>
 </body>

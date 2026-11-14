@@ -96,6 +96,46 @@ When the agent needs to make a design decision:
    → No: Proceed
 ```
 
+## Worked Example — why "C · DEPARTURES" landed (boot UI, 2026-11-14)
+
+CZ picked this design out of three candidates with "so fkn cool". Reproduce the
+method, not the pixels:
+
+1. **De-generify the brief by naming a physical object.** "Make a cool loading
+   screen" produces spinner + gradient + glass. Name a real artifact instead —
+   a meridian line, a precision dial, a departures board — and you inherit its
+   materials, physics, and behaviors. You do not invent a style; you **obey the
+   object**. If an element cannot name its job inside that world ("just
+   decoration"), it gets cut.
+2. **Pull mechanics from source, never looks from screenshots.** The split-flap
+   tiles came from the real registry component's source: drum charset
+   `" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:.-/&!?"`, `FLIP=56ms` per flap,
+   `STAGGER=40ms` per tile, **forward-only stepping**. The lattice wave came
+   from `LatticeLoader`'s source: `864ms` sweep, `cubic-bezier(0.77,0,0.175,1)`.
+   Real constants are why it feels machined rather than "animated like" a flap.
+3. **One metaphor owns every element.** Flap tiles = destination sign; live
+   clock = the board's clock; four rows = the departure list with right-aligned
+   tabular metas; canvas = the lamp field; bottom track = the board edge.
+4. **Motion is a state machine, not a vibe.** Three event classes only —
+   entrance (rows slide in on stage change), progress (ONE wave per stage),
+   completion (everything rests; the only surviving loop is the ticking clock,
+   because a clock is functional, not decorative). "No decorative infinite
+   loops" is what makes it feel alive AND honest.
+5. **Constraints manufactured the uniqueness.** JetBrains Mono only, ONE hue on
+   near-black, no springs, no glass, tabular-nums everywhere, text typeset as a
+   table (left ledger + right metas). Generic output says yes to everything and
+   centers everything; specificity came from saying no.
+6. **Evidence, not vibes.** Headless Chromium + raw CDP: mid-boot and ready
+   screenshots, DOM assertions proving the drum literally stepped (`QEDK`→`RFEL`
+   →`RHEO`), zero console errors, reduced-motion = static final state. The
+   screenshots caught two real bugs a code review missed: a wrong function name
+   that killed the boot, and an unseeded canvas `globalAlpha` array painting the
+   lattice full-bright.
+7. **Preserve the plumbing when porting.** The shipped variant id stayed
+   `'meridian'` everywhere (hard-typed in three files + the IPC handler);
+   DEPARTURES is what `'meridian'` renders. Renaming ids cascades into files the
+   task never named.
+
 ## Design Reference Index
 
 When `include_references` is enabled, the following DESIGN.md templates are available:

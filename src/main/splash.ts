@@ -50,7 +50,11 @@ export function createSplashWindow(): BrowserWindow | null {
 
     // Dismiss on any user input
     const dismiss = () => { if (splash && !splash.isDestroyed()) splash.close(); };
-    splash.webContents.on('did-finish-load', dismiss);
+    // NOTE: no `did-finish-load` dismiss. Closing the splash when its OWN page
+    // finishes loading ends Stage 1 before its sequence can play — the load
+    // completes within a few hundred ms, long before the board animation. The
+    // splash is closed by its own `splash-complete` (sent at animation end),
+    // by user input below, or by the 4s hard cap. `did-fail-load` stays.
     splash.webContents.on('did-fail-load', dismiss);
     splash.on('focus', dismiss);
     splash.on('blur', () => { /* keep visible */ });

@@ -90,14 +90,27 @@
       .df-fb-go-btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 8px; background: transparent; color: #a1a1aa; font-family: inherit; font-size: 12px; cursor: pointer; transition: background-color .15s, color .15s, border-color .15s; }
       .df-fb-go-btn:hover { border-color: rgba(255, 255, 255, .2); background: #18181b; color: #e4e4e7; }
       @media (prefers-reduced-motion: reduce) { .df-fb-btn, .df-fb-copy, .df-fb-go-btn, .df-fb-summary { transition: none; } .df-fb-btn:active { transform: none; } }
-      #df-startup { position: fixed; inset: 0; z-index: 9998; display: grid; place-items: center; background: var(--color-background, #09090b); color: var(--color-foreground, #fafafa); font-family: Inter, system-ui, sans-serif; }
+      /* ── #df-startup — Stage 1.5 of the boot journey (C · DEPARTURES) ─────
+         Sits between the splash window (Stage 1) and the React overlay
+         (Stage 2), painted before the bundle loads, so it must stay STATIC:
+         no JS, no canvas — the same departures identity in one quiet card.
+         JetBrains Mono only (Stage 1/2 type law), the RHEO wordmark at the
+         flap-tile's 30px, and a status line with a block cursor: the cursor
+         blink is FUNCTIONAL liveness (it pairs with the "Still loading"
+         message below), the same exemption class as the board's clock — not
+         a decorative loop. The generic spinner SVG is gone. `var(--token,
+         literal)` + the explicit light block below are the same discipline
+         the old card used: in dev the app stylesheet is injected by Vite's
+         JS runtime and is NOT defined at first paint, so the literal is what
+         actually renders there; in prod the built <link> resolves the var. */
+      #df-startup { position: fixed; inset: 0; z-index: 9998; display: grid; place-items: center; background: var(--color-background, #09090b); font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; }
       #df-startup[hidden] { display: none; }
-      .df-startup-content { width: min(520px, calc(100vw - 48px)); box-sizing: border-box; padding: 20px; border: 1px solid var(--color-border, #27272a); border-radius: 12px; background: var(--color-card, #18181b); }
-      .df-startup-title { margin: 0 0 16px; font-size: 15px; font-weight: 600; letter-spacing: .3em; }
-      .df-startup-status { display: flex; align-items: center; gap: 12px; color: var(--color-muted-foreground, #a1a1aa); font-size: 14px; line-height: 1.5; }
-      .df-startup-spinner { width: 16px; height: 16px; flex: none; animation: df-startup-spin 1s linear infinite; }
-      @keyframes df-startup-spin { to { transform: rotate(360deg); } }
-      @media (prefers-reduced-motion: reduce) { .df-startup-spinner { animation: none; } }
+      .df-startup-content { width: 520px; max-width: calc(100vw - 48px); box-sizing: border-box; padding: 18px 20px 16px; border: 1px solid var(--color-border, #27272a); border-radius: 12px; background: var(--color-card, #18181b); }
+      .df-startup-title { margin: 0; font-size: 30px; font-weight: 500; letter-spacing: .02em; line-height: 1; color: var(--color-foreground, #fafafa); }
+      .df-startup-status { display: flex; align-items: center; gap: 10px; margin-top: 14px; color: var(--color-muted-foreground, #a1a1aa); font-size: 11px; letter-spacing: .08em; }
+      .df-startup-cursor { width: 7px; height: 13px; flex: none; background: var(--ws-accent, #06b6d4); animation: df-cursor-blink 1.1s steps(1) infinite; }
+      @keyframes df-cursor-blink { 50% { opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) { .df-startup-cursor { animation: none; } }
       /* ── LIGHT MODE FOR THE LOADING SCREEN ────────────────────────────────
          The rules above are written `var(--token, DARK_LITERAL)`. The token
          comes from the app stylesheet, which in dev is injected by Vite's JS
@@ -108,16 +121,17 @@
          These overrides set the light values DIRECTLY on the loading screen, so
          it is correct on first paint with or without the app stylesheet. They
          are the same values as the `html.light` block in src/index.css:
-           paper #f5f2ec · card #fcfbf8 · ink #1c1917 · muted #57534e
+           paper #f5f2ec · card #fcfbf8 · ink #1c1917 · muted #78716c
            hairline rgb(28 25 23 / 0.10) · signal teal #0e7490
          Design law (design/design.md §11): light is WARM PAPER, depth comes
          from HAIRLINES never shadow, and the ONE signal hue is deep teal —
-         which is why the spinner takes the accent in light and stays neutral
-         in dark. Do not add a second hue here. */
-      html.light #df-startup { background: #f5f2ec; color: #1c1917; }
+         which is why the cursor takes the accent in light and stays cyan
+         default in dark. Do not add a second hue here. */
+      html.light #df-startup { background: #f5f2ec; }
       html.light .df-startup-content { border-color: rgb(28 25 23 / 0.10); background: #fcfbf8; }
-      html.light .df-startup-status { color: #57534e; }
-      html.light .df-startup-spinner { color: #0e7490; }
+      html.light .df-startup-title { color: #1c1917; }
+      html.light .df-startup-status { color: #78716c; }
+      html.light .df-startup-cursor { background: #0e7490; }
     </style>
   </head>
   <body>
@@ -125,8 +139,8 @@
       <div class="df-startup-content">
         <div class="df-startup-title">RHEO</div>
         <div class="df-startup-status">
-          <svg class="df-startup-spinner" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v4m4.2 1.8 2.9-2.9M18 12h4m-5.8 4.2 2.9 2.9M12 18v4m-7.1-2.9 2.9-2.9M2 12h4m-1.1-7.1 2.9 2.9" /></svg>
-          <span id="df-startup-message">Loading application…</span>
+          <span class="df-startup-cursor" aria-hidden="true"></span>
+          <span id="df-startup-message">loading application</span>
         </div>
       </div>
     </div>
