@@ -2198,6 +2198,16 @@ financeGetFtPersons: () => ipcRenderer.invoke('finance:get-ft-persons'),
   listDevices: () => ipcRenderer.invoke('list-devices'),
   revokeDevice: (deviceId: string) => ipcRenderer.invoke('revoke-device', deviceId),
   revokeAllDevices: () => ipcRenderer.invoke('revoke-all-devices'),
+  // Sync server lifecycle (start/stop rheo/sync-server from the Devices panel)
+  syncServerStatus: () => ipcRenderer.invoke('sync-server:status'),
+  syncServerStart: () => ipcRenderer.invoke('sync-server:start'),
+  syncServerStop: () => ipcRenderer.invoke('sync-server:stop'),
+  syncServerLogs: () => ipcRenderer.invoke('sync-server:logs'),
+  onSyncServerStatus: (callback: (data: any) => void) => {
+    const listener = (_e: any, payload: any) => callback(payload);
+    ipcRenderer.on('sync-server-status', listener);
+    return () => ipcRenderer.removeListener('sync-server-status', listener);
+  },
   // ========== Phone telemetry (the desktop half of the phone-stats feature) ==========
   // These back src/main.ts 'phone-telemetry-live' / 'phone-telemetry-summary'. They
   // are invoke() (not send()), so they do NOT need a VALID_CHANNELS entry — that

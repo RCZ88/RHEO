@@ -106,6 +106,7 @@ import { registerGasHandlers } from "./main/gas/ipc";
 import { registerLectureHandlers } from "./services/lecture/index";
 import { StateCoordinator } from "./main/stateCoordinator";
 import { initAutoUpdate } from "./main/autoUpdate";
+import { registerSyncServerIpc, disposeSyncServer } from "./main/syncServerManager";
 // listCases + runEval are for the scheduled baseline (see scheduleEvalBaselines).
 import { initEval, listCases, runEval } from "./services/aiEval";
 // ── AUTOMATIONS (RESULT.md, P0) ──────────────────────────────────────────
@@ -5100,6 +5101,7 @@ const { buildChain, runWithFallback } = require("./services/providers/router");
         // for packaged builds. Wrapped for the same reason as every handler above —
         // a failed update check must never stop the app from starting.
         try { initAutoUpdate(() => mainWindow as any); console.log('[DeskFlow] ✅ Auto-update initialised'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Auto-update init failed (ignored):', err.message); }
+        try { registerSyncServerIpc(); console.log('[DeskFlow] ✅ Sync-server manager registered'); } catch (err: any) { console.error('[DeskFlow] ⚠️ Sync-server manager init failed (ignored):', err.message); }
 
         storageError = null;
     }
@@ -29318,6 +29320,9 @@ electron_1.app.on('before-quit', async () => {
     // Only ever signals a router THIS process spawned. A router the user
     // started in their own terminal is left running untouched.
     try { require('./services/aiRouterProcess').disposeRouter(); } catch { /* ignore */ }
+    // Same ownership rule for the sync server: only ever stops a server THIS
+    // process spawned. One the user started in a terminal keeps serving.
+    try { disposeSyncServer(); } catch { /* ignore */ }
 
     // Flush any pending Knowledge Base write
     try {
