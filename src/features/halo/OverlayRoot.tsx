@@ -1646,6 +1646,16 @@ const inBrowser = currentApp.category === 'Browser';
    * The stroke exists ONLY for a bounded target: an active session with an `endsAt`. The plain
    * stopwatch and an open-ended session get no stroke, because a ring with no end is a lie. */
   const sessionActive = !!focus?.ok && !!focus.active;
+  /* THE POSITIVE HALF OF CZ'S FOCUS RULE — the island opens on NOW, but when a session
+   * BECOMES active while the user sits on the Now page, Focus leads: the countdown is
+   * then the most honest thing the face can show. The ref gates it to the false→true
+   * EDGE only, so an already-running session never yanks the user off a page they
+   * deliberately switched to, and ending a session leaves them where they are. */
+  const focusLeadRef = useRef(false);
+  useEffect(() => {
+    if (sessionActive && !focusLeadRef.current && tab === 'now') setTab('focus');
+    focusLeadRef.current = sessionActive;
+  }, [sessionActive, tab]);
   const sessionPaused = !!focus?.paused;
   const sessionEndsAt = typeof focus?.endsAt === 'number' ? focus.endsAt : null;
   const sessionStartedAt = typeof focus?.startedAt === 'number' ? focus.startedAt : null;
