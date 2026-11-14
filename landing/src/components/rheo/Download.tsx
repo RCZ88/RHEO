@@ -117,7 +117,7 @@ const LAYER_NAMES: Record<LayerId, string> = {
 const glyphS = { display: "block", flexShrink: 0 } as const;
 const GS = 0.9;
 
-function RendererGlyph() {
+function RendererGlyph({ rm }: { rm: boolean }) {
   return (
     <svg viewBox="0 0 132 36" width={132} height={36} aria-hidden="true" focusable="false" style={glyphS}>
       {/* miniature app window: title bar, sidebar, content rows */}
@@ -128,14 +128,20 @@ function RendererGlyph() {
       <line x1={48} y1={10} x2={48} y2={34} stroke="#52525b" strokeWidth={GS} />
       <line x1={38} y1={16} x2={44} y2={16} stroke="#52525b" strokeWidth={GS} />
       <line x1={38} y1={21} x2={44} y2={21} stroke="#52525b" strokeWidth={GS} />
-      <line x1={52} y1={16} x2={94} y2={16} stroke="#52525b" strokeWidth={GS} />
-      <line x1={52} y1={21} x2={94} y2={21} stroke="#52525b" strokeWidth={GS} />
-      <line x1={52} y1={26} x2={80} y2={26} stroke="#52525b" strokeWidth={GS} />
+      {/* idle life: the content rows breathe — activity is flowing (rm-gated) */}
+      <motion.g
+        animate={rm ? undefined : { opacity: [1, 0.5, 1] }}
+        transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+      >
+        <line x1={52} y1={16} x2={94} y2={16} stroke="#52525b" strokeWidth={GS} />
+        <line x1={52} y1={21} x2={94} y2={21} stroke="#52525b" strokeWidth={GS} />
+        <line x1={52} y1={26} x2={80} y2={26} stroke="#52525b" strokeWidth={GS} />
+      </motion.g>
     </svg>
   );
 }
 
-function MainGlyph() {
+function MainGlyph({ rm }: { rm: boolean }) {
   const ticks = Array.from({ length: 8 }, (_, i) => {
     const a = (i * Math.PI) / 4;
     return {
@@ -149,9 +155,16 @@ function MainGlyph() {
     <svg viewBox="0 0 132 36" width={132} height={36} aria-hidden="true" focusable="false" style={glyphS}>
       {/* compact engine housing: central mechanism, radial ticks, two connections */}
       <rect x={41} y={4} width={50} height={28} rx={2} fill="#101014" stroke="#a1a1aa" strokeWidth={GS} />
-      {ticks.map((t, i) => (
-        <line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke="#52525b" strokeWidth={GS} />
-      ))}
+      {/* idle life: the tick ring turns — the main process is always recording (rm-gated) */}
+      <motion.g
+        animate={rm ? undefined : { rotate: 360 }}
+        transition={{ duration: 24, repeat: Infinity, ease: "linear" }}
+        style={{ transformOrigin: "66px 18px" }}
+      >
+        {ticks.map((t, i) => (
+          <line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke="#52525b" strokeWidth={GS} />
+        ))}
+      </motion.g>
       <circle cx={66} cy={18} r={7} fill="#0a0a0c" stroke="#a1a1aa" strokeWidth={GS} />
       <circle cx={66} cy={18} r={1.5} fill="#f4f4f5" />
       <line x1={41} y1={12} x2={30} y2={12} stroke="#52525b" strokeWidth={GS} />
@@ -162,7 +175,7 @@ function MainGlyph() {
   );
 }
 
-function SqliteGlyph() {
+function SqliteGlyph({ rm }: { rm: boolean }) {
   // three separate folded documents labelled DB / WAL / SHM
   const pages = [
     { x: 30, y: 3, label: "DB" },
@@ -171,33 +184,53 @@ function SqliteGlyph() {
   ];
   return (
     <svg viewBox="0 0 132 36" width={132} height={36} aria-hidden="true" focusable="false" style={glyphS}>
-      {pages.map((p) => (
-        <g key={p.label}>
-          <path d={`M ${p.x},${p.y} h16 l6,6 v12 h-22 z`} fill="#0a0a0c" stroke="#a1a1aa" strokeWidth={GS} />
-          <path d={`M ${p.x + 16},${p.y} v6 h6 z`} fill="#101014" stroke="#52525b" strokeWidth={GS} />
-          <text x={p.x + 11} y={p.y + 24} textAnchor="middle" fontSize={6.5} fill="#8a8a94" fontFamily="'JetBrains Mono', monospace">
-            {p.label}
-          </text>
-        </g>
-      ))}
+      {pages.map((p) => {
+        const page = (
+          <>
+            <path d={`M ${p.x},${p.y} h16 l6,6 v12 h-22 z`} fill="#0a0a0c" stroke="#a1a1aa" strokeWidth={GS} />
+            <path d={`M ${p.x + 16},${p.y} v6 h6 z`} fill="#101014" stroke="#52525b" strokeWidth={GS} />
+            <text x={p.x + 11} y={p.y + 24} textAnchor="middle" fontSize={6.5} fill="#8a8a94" fontFamily="'JetBrains Mono', monospace">
+              {p.label}
+            </text>
+          </>
+        );
+        // idle life: the WAL page flutters — writes are landing (rm-gated)
+        return p.label === "WAL" ? (
+          <motion.g
+            key={p.label}
+            animate={rm ? undefined : { opacity: [1, 0.65, 1] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+          >
+            {page}
+          </motion.g>
+        ) : (
+          <g key={p.label}>{page}</g>
+        );
+      })}
     </svg>
   );
 }
 
-function DiskGlyph() {
+function DiskGlyph({ rm }: { rm: boolean }) {
   return (
     <svg viewBox="0 0 132 36" width={132} height={36} aria-hidden="true" focusable="false" style={glyphS}>
       {/* physical drive: housing, platter, spindle, folder mark */}
       <rect x={36} y={6} width={60} height={24} rx={2} fill="#101014" stroke="#a1a1aa" strokeWidth={GS} />
       <circle cx={54} cy={18} r={8} fill="#0a0a0c" stroke="#a1a1aa" strokeWidth={GS} />
       <circle cx={54} cy={18} r={1.5} fill="#f4f4f5" />
-      <line x1={55.4} y1={16.6} x2={59.7} y2={12.4} stroke="#52525b" strokeWidth={GS} />
+      {/* idle life: the platter turns — its radius mark shows the spin (rm-gated) */}
+      <motion.line
+        animate={rm ? undefined : { rotate: 360 }}
+        transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+        style={{ transformOrigin: "54px 18px" }}
+        x1={55.4} y1={16.6} x2={59.7} y2={12.4} stroke="#52525b" strokeWidth={GS}
+      />
       <path d="M 78,13 h5 l2,2 h9 v9 h-16 z" fill="#0a0a0c" stroke="#52525b" strokeWidth={GS} />
     </svg>
   );
 }
 
-const GLYPHS: Record<LayerId, React.FC> = {
+const GLYPHS: Record<LayerId, React.FC<{ rm: boolean }>> = {
   renderer: RendererGlyph,
   main: MainGlyph,
   sqlite: SqliteGlyph,
@@ -241,12 +274,36 @@ function LayersStack({
 
   const someSelected = selected !== null;
   const extra = 2 + 12 * sep; // gap per pair: rest 4.16px → open 14px
+  const REST_EXTRA = 2 + 12 * REST_SEP; // the rest gap the burst starts from
   const EASE = "cubic-bezier(0.16,1,0.3,1)";
   const tSel = rm ? undefined : `transform 200ms ${EASE}`;
   const tOp = rm ? undefined : `opacity 200ms ${EASE}`;
 
   return (
     <div style={{ position: "relative" }}>
+      {/* the shockwave — ONE hairline ring expanding from the stack center.
+          LAMINAR: a shockwave is a line, not light — no glow, no gradient.
+          Runs once per LayersStack mount (the vault→layers burst), rm-gated. */}
+      {!rm && (
+        <motion.div
+          aria-hidden="true"
+          initial={{ opacity: 0.45, scale: 0.25 }}
+          animate={{ opacity: 0, scale: 1.9 }}
+          transition={{ duration: 0.7, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
+          style={{
+            position: "absolute",
+            top: 142, // center of the fan group (284px tall, centered)
+            left: "50%",
+            width: 220,
+            height: 220,
+            marginLeft: -110,
+            marginTop: -110,
+            borderRadius: 999,
+            border: "1px solid rgba(255,255,255,0.5)",
+            pointerEvents: "none",
+          }}
+        />
+      )}
       {/* the four layers — native buttons in a group, NOT a nested tablist (L2) */}
       <div
         role="group"
@@ -264,13 +321,22 @@ function LayersStack({
           const isSel = selected === id;
           const Glyph = GLYPHS[id];
           return (
-            <div
+            <motion.div
               key={id}
-              style={{
-                transform: `translateY(${(i - 1.5) * extra}px)`,
-                transition: tSel,
-              }}
+              // the burst: plates fly OUT from a tight center stack to their
+              // rest slots (the vault was holding them). The inner fan
+              // transform is untouched — this wrapper only carries the
+              // entrance. Staggered top→bottom; rm renders static (initial=false).
+              initial={rm ? false : { opacity: 0, scale: 0.86, y: (1.5 - i) * REST_EXTRA }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ duration: 0.56, delay: 0.1 + i * 0.07, ease: [0.16, 1, 0.3, 1] }}
             >
+              <div
+                style={{
+                  transform: `translateY(${(i - 1.5) * extra}px)`,
+                  transition: tSel,
+                }}
+              >
               <button
                 type="button"
                 aria-pressed={isSel}
@@ -307,15 +373,19 @@ function LayersStack({
                   style={{
                     marginLeft: "auto",
                     display: "block",
-                    // labels stay readable; only the illustration recedes (L2)
+                    // labels stay readable; only the illustration recedes (L2).
+                    // Selection = brightness (LAMINAR: importance is whiteness,
+                    // never hue) — not another opacity step.
                     opacity: isSel || !someSelected ? 1 : 0.55,
-                    transition: tOp,
+                    filter: isSel ? "brightness(1.15)" : undefined,
+                    transition: rm ? undefined : `opacity 200ms ${EASE}, filter 200ms ${EASE}`,
                   }}
                 >
-                  <Glyph />
+                  <Glyph rm={rm} />
                 </span>
               </button>
-            </div>
+              </div>
+            </motion.div>
           );
         })}
       </div>
@@ -769,6 +839,10 @@ function layersSweep(reverse = false): Pt[] {
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// §7b runtime stamp — proves the v9.0 bundle is actually served (module scope:
+// logs once per load, not per render).
+console.log("%c[FigureInstrument] v9.0 loaded", "color: #fbbf24; font-weight: bold");
+
 function FigureInstrument({ rm }: { rm: boolean }) {
   const [mode, setMode] = useState<"vault" | "layers">("vault");
   const [readout, setReadout] = useState<string | null>(null);
@@ -971,7 +1045,21 @@ function FigureInstrument({ rm }: { rm: boolean }) {
               key={mode}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 0.9, y: 0 }}
-              exit={{ opacity: 0, y: -8, transition: { duration: rm ? 0 : 0.32, ease: [0.16, 1, 0.3, 1] } }}
+              exit={
+                // the vault leaves the way it should physically: it RECOILS
+                // (releases pressure, scale 1.045) then IMPLODES away (scale
+                // .84, sinks) while the plates burst out of it on the incoming
+                // side. Enter/exit share one path (apple-design §7). Keyframes:
+                // [rest, recoil, gone]. The stack's own exit stays the old fade.
+                isVault
+                  ? {
+                      opacity: [0.9, 0.9, 0],
+                      scale: [1, 1.045, 0.84],
+                      y: [0, -2, -6],
+                      transition: { duration: rm ? 0 : 0.36, times: [0, 0.3, 1], ease: [0.16, 1, 0.3, 1] },
+                    }
+                  : { opacity: 0, y: -8, transition: { duration: rm ? 0 : 0.32, ease: [0.16, 1, 0.3, 1] } }
+              }
               transition={{
                 duration: rm ? 0 : 0.4,
                 delay: rm ? 0 : 0.12,
