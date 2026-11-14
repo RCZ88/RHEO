@@ -1,0 +1,65 @@
+# RHEO landing — build + deploy to Cloudflare Pages (project `rheooo`).
+#
+# Replaces netlify.toml (deleted 2026-11-15, CZ decision). Netlify is permanently
+# frozen at v9.0 with deploys disabled; the live site is https://rheooo.pages.dev.
+#
+# ONE-TIME SETUP (CZ): add a repo secret `CLOUDFLARE_API_TOKEN` holding a
+# Cloudflare API token with Pages: Edit permission (wrangler pages:write).
+# The accountId below is NOT a secret — it is an identifier, not a credential.
+#
+# The build command is exactly what CZ runs locally (cd landing &&
+# NODE_OPTIONS=--max-old-space-size=2048 npm run build). The bounded heap is a
+# local-laptop OOM constraint (AGENTS.md §0-0), kept here so local and CI builds
+# stay identical — CI runners have memory to spare; the flag is harmless there.
+#
+# NO `--force` on the deploy. The project already exists; a force deploy would
+# recreate/overwrite its configuration.
+#
+# Static export (`output: "export"` in landing/next.config.ts) writes to
+# landing/out/, and landing's media lives INSIDE landing/public/media/, so the
+# paths filter below is complete — nothing outside landing/ affects the build.
+
+name: landing-deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "landing/**"
+      - ".github/workflows/landing-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: landing-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: landing/package-lock.json
+
+      - name: Install (landing only — the Electron app's src/ is never installed)
+        working-directory: landing
+        run: npm ci
+
+      - name: Build (static export → landing/out)
+        working-directory: landing
+        run: NODE_OPTIONS=--max-old-space-size=2048 npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 66c3d27bcc4484468876a94ec19debe9
+          wranglerVersion: "4"
+          command: pages deploy landing/out --project-name=rheooo --branch=main
