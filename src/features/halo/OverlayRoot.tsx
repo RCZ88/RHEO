@@ -1879,10 +1879,17 @@ const inBrowser = currentApp.category === 'Browser';
              * bloom by 0 through `--halo-bloom`, so the warm-paper edge is a hairline only. */
             ...(prefs.ambient === 'edge' && !isAway
               ? {
-                  borderColor: `color-mix(in srgb, var(--tier-${dwellTier}) ${dwellTier === 'neutral' ? 40 : 55}%, var(--halo-border))`,
+                  /* ALL THREE TIERS ON EQUAL FOOTING (CZ, 2026-11-15: "make sure the blue
+                   * from the neutral SHOWS PROPERLY, not just the green and the red").
+                   * Neutral was dialed to 40/14 while the pair got 55/28 — a deliberate
+                   * half-strength that made the blue hairline nearly invisible on the zinc
+                   * surface (blue is also perceptually dimmer than green/red in the dark).
+                   * A tier is DATA, not a mood: the same mix for all three, and the words
+                   * on Now (`APP · NEUTRAL`) carry the meaning. */
+                  borderColor: `color-mix(in srgb, var(--tier-${dwellTier}) 55%, var(--halo-border))`,
                   boxShadow: expanded
                     ? 'var(--halo-shadow)'
-                    : `var(--halo-shadow), 0 0 12px color-mix(in srgb, var(--tier-${dwellTier}) calc(${dwellTier === 'neutral' ? 14 : 28}% * var(--halo-bloom)), transparent)`,
+                    : `var(--halo-shadow), 0 0 12px color-mix(in srgb, var(--tier-${dwellTier}) calc(28% * var(--halo-bloom)), transparent)`,
                 }
               : isAway
                 /* AFK kills the BLOOM, not the elevation: `--halo-shadow` is the pill's lift off
